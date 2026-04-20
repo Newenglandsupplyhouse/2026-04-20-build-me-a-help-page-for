@@ -1,0 +1,16 @@
+{
+  "sections": {
+    "main": {
+      "type": "shopify-help-chat",
+      "settings": {
+        "heading": "What are you shopping for today?",
+        "intro_message": "Ask about products, sizing, shipping, or recommendations.",
+        "placeholder": "Type here and press Enter",
+        "api_url": ""
+      }
+    }
+  },
+  "order": [
+    "main"
+  ]
+}
