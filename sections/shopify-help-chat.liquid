@@ -286,8 +286,21 @@
     updateViewportHeight();
     updateHeaderOffset();
     if (!isMobileViewport()) {
+      const scrollDesktopPageToTop = () => {
+        try {
+          window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+        } catch {
+          window.scrollTo(0, 0);
+        }
+      };
+
+      scrollDesktopPageToTop();
       window.visualViewport?.addEventListener("resize", updateViewportHeight);
       window.visualViewport?.addEventListener("scroll", updateViewportHeight);
+      window.addEventListener("load", scrollDesktopPageToTop);
+      window.addEventListener("pageshow", scrollDesktopPageToTop);
+      setTimeout(scrollDesktopPageToTop, 50);
+      setTimeout(scrollDesktopPageToTop, 250);
     }
     window.addEventListener("orientationchange", updateViewportHeight);
     window.addEventListener("resize", updateViewportHeight);
