@@ -285,16 +285,24 @@ function getInjectedChatbaseOverrides() {
         flex: 0 0 auto !important;
       }
 
-      @media (max-width: 749px) {
-        html,
-        body,
-        [data-slot="sidebar-wrapper"],
-        [data-slot="sidebar-wrapper"] > main {
-          min-height: var(--nesh-mobile-vh) !important;
-          height: var(--nesh-mobile-vh) !important;
-          max-height: var(--nesh-mobile-vh) !important;
-          overflow: hidden !important;
-        }
+        @media (max-width: 749px) {
+          html,
+          body,
+          [data-slot="sidebar-wrapper"] {
+            min-height: var(--nesh-mobile-vh) !important;
+            height: var(--nesh-mobile-vh) !important;
+            max-height: var(--nesh-mobile-vh) !important;
+            overflow: hidden !important;
+          }
+
+          [data-slot="sidebar-wrapper"] > main {
+            min-height: var(--nesh-mobile-vh) !important;
+            height: var(--nesh-mobile-vh) !important;
+            max-height: var(--nesh-mobile-vh) !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+          }
 
         body,
         main[data-theme="dark"],
