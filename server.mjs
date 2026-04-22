@@ -276,6 +276,7 @@ function getInjectedChatbaseOverrides() {
         flex: 0 0 auto !important;
         justify-content: flex-start !important;
         align-items: center !important;
+        width: 100% !important;
       }
 
       main > header + div > div > div > div:first-child > div:first-child {
@@ -283,6 +284,8 @@ function getInjectedChatbaseOverrides() {
       }
 
       main > header + div > div > div > div:first-child h1 {
+        display: block !important;
+        width: 100% !important;
         margin-left: auto !important;
         margin-right: auto !important;
         text-align: center !important;
