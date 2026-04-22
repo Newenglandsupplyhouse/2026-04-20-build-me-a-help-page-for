@@ -275,10 +275,17 @@ function getInjectedChatbaseOverrides() {
       main > header + div > div > div > div:first-child {
         flex: 0 0 auto !important;
         justify-content: flex-start !important;
+        align-items: center !important;
       }
 
       main > header + div > div > div > div:first-child > div:first-child {
         display: none !important;
+      }
+
+      main > header + div > div > div > div:first-child h1 {
+        margin-left: auto !important;
+        margin-right: auto !important;
+        text-align: center !important;
       }
 
       [data-has-messages="false"] {
