@@ -126,6 +126,7 @@ function getProxyResponseHeaders(upstreamResponse) {
 function getInjectedChatbaseOverrides() {
   return `
     <style id="nesh-chatbase-sidebar-overrides">
+      /* nesh-chatbase-reset-v2 */
       [data-slot="sidebar-wrapper"] {
         --sidebar-width: 0px !important;
         --sidebar-width-icon: 0px !important;
