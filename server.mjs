@@ -560,6 +560,45 @@ function getInjectedChatbaseOverrides() {
           } catch {}
         };
 
+        const centerLandingHeadingToInput = () => {
+          const heading = [...document.querySelectorAll('h1')].find((element) =>
+            /How can I help you today\?/i.test(element.textContent || '')
+          );
+          const inputShell =
+            document.querySelector('[data-slot="chatbot-input-box"]')?.closest('.group/input') ||
+            document.querySelector('textarea[data-slot="chatbot-input-box"]')?.closest('.group/input');
+          const stage = document.querySelector('main > header + div');
+
+          if (!heading || !inputShell || !stage) {
+            return;
+          }
+
+          const stageRect = stage.getBoundingClientRect();
+          const inputRect = inputShell.getBoundingClientRect();
+          const wrap = heading.parentElement;
+          const clampedWidth = Math.max(220, Math.round(inputRect.width));
+          const offsetLeft = Math.max(0, Math.round(inputRect.left - stageRect.left));
+
+          if (!wrap) {
+            return;
+          }
+
+          try {
+            wrap.style.setProperty('display', 'block', 'important');
+            wrap.style.setProperty('width', `${clampedWidth}px`, 'important');
+            wrap.style.setProperty('max-width', `${clampedWidth}px`, 'important');
+            wrap.style.setProperty('margin-left', `${offsetLeft}px`, 'important');
+            wrap.style.setProperty('margin-right', '0', 'important');
+            wrap.style.setProperty('text-align', 'center', 'important');
+
+            heading.style.setProperty('display', 'block', 'important');
+            heading.style.setProperty('width', '100%', 'important');
+            heading.style.setProperty('max-width', 'none', 'important');
+            heading.style.setProperty('margin', '0 auto 12px', 'important');
+            heading.style.setProperty('text-align', 'center', 'important');
+          } catch {}
+        };
+
         const syncInputFocusState = (active) => {
           if (!isMobileViewport()) {
             document.body.classList.remove('nesh-chatbase-input-active');
@@ -593,22 +632,27 @@ function getInjectedChatbaseOverrides() {
           document.addEventListener('DOMContentLoaded', () => {
             updateMobileViewportHeight();
             hideSidebar();
+            centerLandingHeadingToInput();
             stabilizeLandingLayout();
             forceMobileLandingLayout();
             lockViewportToTop();
             pullEmptyStateToTop();
+            setTimeout(centerLandingHeadingToInput, 120);
           }, { once: true });
         } else {
           updateMobileViewportHeight();
           hideSidebar();
+          centerLandingHeadingToInput();
           stabilizeLandingLayout();
           forceMobileLandingLayout();
           lockViewportToTop();
           pullEmptyStateToTop();
+          setTimeout(centerLandingHeadingToInput, 120);
         }
 
         new MutationObserver(() => {
           hideSidebar();
+          centerLandingHeadingToInput();
           stabilizeLandingLayout();
           forceMobileLandingLayout();
           lockViewportToTop();
@@ -622,6 +666,7 @@ function getInjectedChatbaseOverrides() {
           if (event.target && event.target.matches('textarea[data-slot="chatbot-input-box"]')) {
             syncInputFocusState(true);
             updateMobileViewportHeight();
+            centerLandingHeadingToInput();
             forceMobileLandingLayout();
             lockViewportToTop();
             pullEmptyStateToTop();
@@ -631,6 +676,9 @@ function getInjectedChatbaseOverrides() {
             setTimeout(updateMobileViewportHeight, 0);
             setTimeout(updateMobileViewportHeight, 120);
             setTimeout(updateMobileViewportHeight, 260);
+            setTimeout(centerLandingHeadingToInput, 0);
+            setTimeout(centerLandingHeadingToInput, 120);
+            setTimeout(centerLandingHeadingToInput, 260);
             setTimeout(forceMobileLandingLayout, 0);
             setTimeout(forceMobileLandingLayout, 120);
             setTimeout(forceMobileLandingLayout, 260);
@@ -647,9 +695,11 @@ function getInjectedChatbaseOverrides() {
           if (event.target && event.target.matches('textarea[data-slot="chatbot-input-box"]')) {
             syncInputFocusState(false);
             updateMobileViewportHeight();
+            centerLandingHeadingToInput();
             forceMobileLandingLayout();
             setTimeout(stabilizeLandingLayout, 0);
             setTimeout(updateMobileViewportHeight, 0);
+            setTimeout(centerLandingHeadingToInput, 0);
             setTimeout(forceMobileLandingLayout, 0);
             setTimeout(lockViewportToTop, 0);
             setTimeout(pullEmptyStateToTop, 0);
@@ -659,6 +709,7 @@ function getInjectedChatbaseOverrides() {
         window.visualViewport?.addEventListener('resize', () => {
           updateMobileViewportHeight();
           syncInputFocusState(document.activeElement?.matches?.('textarea[data-slot="chatbot-input-box"]'));
+          centerLandingHeadingToInput();
           forceMobileLandingLayout();
           lockViewportToTop();
           pullEmptyStateToTop();
@@ -668,6 +719,9 @@ function getInjectedChatbaseOverrides() {
           setTimeout(updateMobileViewportHeight, 0);
           setTimeout(updateMobileViewportHeight, 120);
           setTimeout(updateMobileViewportHeight, 260);
+          setTimeout(centerLandingHeadingToInput, 0);
+          setTimeout(centerLandingHeadingToInput, 120);
+          setTimeout(centerLandingHeadingToInput, 260);
           setTimeout(forceMobileLandingLayout, 0);
           setTimeout(forceMobileLandingLayout, 120);
           setTimeout(forceMobileLandingLayout, 260);
@@ -682,6 +736,7 @@ function getInjectedChatbaseOverrides() {
         window.addEventListener('resize', () => {
           updateMobileViewportHeight();
           syncInputFocusState(document.activeElement?.matches?.('textarea[data-slot="chatbot-input-box"]'));
+          centerLandingHeadingToInput();
           forceMobileLandingLayout();
           lockViewportToTop();
           pullEmptyStateToTop();
