@@ -33,34 +33,40 @@
     display: none !important;
   }
 
+  body.shopify-chatbase-help-page {
+    background: #08080b !important;
+  }
+
+  body.shopify-chatbase-help-page main,
+  body.shopify-chatbase-help-page #MainContent,
+  body.shopify-chatbase-help-page .content-for-layout,
+  body.shopify-chatbase-help-page .shopify-section,
+  body.shopify-chatbase-help-page .page-width,
+  body.shopify-chatbase-help-page .page-content,
+  body.shopify-chatbase-help-page .main-page-wrapper {
+    background: #08080b !important;
+  }
+
   #{{ section_id }} {
-    --shopify-help-header-offset: 164px;
-    margin-top: var(--shopify-help-header-offset);
-    height: calc(100dvh - var(--shopify-help-header-offset));
-    min-height: calc(100dvh - var(--shopify-help-header-offset));
+    height: 100dvh;
+    min-height: 100dvh;
     background: #08080b;
     padding: 0;
     overflow: hidden;
   }
 
-  @media screen and (max-width: 749px) {
-    #{{ section_id }} {
-      --shopify-help-header-offset: 96px;
-    }
-  }
-
   #{{ section_id }} .shopify-chatbase-help__frame {
     display: block;
     width: 100%;
-    height: calc(100dvh - var(--shopify-help-header-offset));
-    min-height: calc(100dvh - var(--shopify-help-header-offset));
+    height: 100dvh;
+    min-height: 100dvh;
     border: 0;
     background: #08080b;
   }
 
   #{{ section_id }} .shopify-chatbase-help__empty {
-    height: calc(100dvh - var(--shopify-help-header-offset));
-    min-height: calc(100dvh - var(--shopify-help-header-offset));
+    height: 100dvh;
+    min-height: 100dvh;
     display: grid;
     place-items: center;
     padding: 24px;
@@ -106,55 +112,6 @@
       body.style.height = "100%";
       body.style.minHeight = "100%";
     }
-
-    const updateHeaderOffset = () => {
-      const selectors = [
-        'header',
-        '[role="banner"]',
-        '.section-header',
-        '.header-wrapper',
-        '.shopify-section-group-header-group',
-        '[id*="shopify-section"][id*="header"]',
-        '.announcement-bar',
-        '.utility-bar',
-        '.top-bar'
-      ];
-
-      const candidates = selectors
-        .flatMap((selector) => [...document.querySelectorAll(selector)])
-        .filter((element, index, array) => array.indexOf(element) === index)
-        .filter((element) => !root.contains(element))
-        .filter((element) => {
-          const rect = element.getBoundingClientRect();
-          const style = window.getComputedStyle(element);
-
-          if (style.display === "none" || style.visibility === "hidden") {
-            return false;
-          }
-
-          if (rect.height <= 0 || rect.height > 320) {
-            return false;
-          }
-
-          return rect.bottom > 0 && rect.top < window.innerHeight * 0.5;
-        });
-
-      const measuredOffset = candidates.reduce((maxBottom, element) => {
-        const rect = element.getBoundingClientRect();
-        return Math.max(maxBottom, Math.ceil(rect.bottom));
-      }, 0);
-
-      const fallbackOffset = window.innerWidth <= 749 ? 96 : 164;
-      const headerOffset = Math.max(measuredOffset, fallbackOffset);
-
-      root.style.setProperty("--shopify-help-header-offset", `${headerOffset}px`);
-    };
-
-    updateHeaderOffset();
-    window.addEventListener("resize", updateHeaderOffset);
-    window.addEventListener("load", updateHeaderOffset);
-    setTimeout(updateHeaderOffset, 250);
-    setTimeout(updateHeaderOffset, 1000);
   })();
 </script>
 
