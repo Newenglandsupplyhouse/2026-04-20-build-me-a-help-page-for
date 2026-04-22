@@ -1,0 +1,49 @@
+name: Shopify Theme Push
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "sections/**"
+      - "templates/**"
+      - "snippets/**"
+      - "layout/**"
+      - "assets/**"
+      - "config/**"
+      - "locales/**"
+
+jobs:
+  push-theme:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.SHOPIFY_CLI_THEME_TOKEN != '' && secrets.SHOPIFY_THEME_ID != '' && secrets.SHOPIFY_STORE != '' }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Shopify CLI
+        run: npm install -g @shopify/cli@latest
+
+      - name: Push theme files to Shopify
+        env:
+          SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_CLI_THEME_TOKEN }}
+          SHOPIFY_FLAG_STORE: ${{ secrets.SHOPIFY_STORE }}
+        run: |
+          shopify theme push \
+            --theme "${{ secrets.SHOPIFY_THEME_ID }}" \
+            --nodelete \
+            --only "sections/*.liquid" \
+            --only "sections/*.json" \
+            --only "templates/*.json" \
+            --only "templates/*.liquid" \
+            --only "snippets/*" \
+            --only "layout/*" \
+            --only "assets/*" \
+            --only "config/*" \
+            --only "locales/*"
