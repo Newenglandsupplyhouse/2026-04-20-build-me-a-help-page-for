@@ -224,7 +224,12 @@
     if (frame && resetButton) {
       const initialSrc = frame.getAttribute("src");
       resetButton.addEventListener("click", () => {
-        frame.setAttribute("src", initialSrc);
+        const separator = initialSrc.includes("?") ? "&" : "?";
+        const resetSrc = `${initialSrc}${separator}reset=${Date.now()}`;
+        frame.setAttribute("src", "about:blank");
+        window.setTimeout(() => {
+          frame.setAttribute("src", resetSrc);
+        }, 20);
       });
     }
 
