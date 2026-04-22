@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const DEFAULT_CHATBASE_HELP_URL = "https://www.chatbase.co/iQxwux6_Bjma9xxVgm8Nb/help";
 
 function loadEnvFile() {
   const envPath = path.join(__dirname, ".env");
@@ -51,6 +52,171 @@ function sendHtml(response, statusCode, html, origin = "*") {
     "Content-Type": "text/html; charset=utf-8"
   });
   response.end(html);
+}
+
+function getChatbaseHelpBaseUrl() {
+  try {
+    return new URL(process.env.CHATBASE_HELP_URL || DEFAULT_CHATBASE_HELP_URL);
+  } catch {
+    return new URL(DEFAULT_CHATBASE_HELP_URL);
+  }
+}
+
+function buildChatbaseHelpTarget(requestUrl) {
+  const baseUrl = getChatbaseHelpBaseUrl();
+  const suffix = requestUrl.pathname === "/chatbase-help"
+    ? ""
+    : requestUrl.pathname.slice("/chatbase-help".length);
+  const upstreamPath = `${baseUrl.pathname.replace(/\/$/, "")}${suffix}` || "/";
+  return new URL(`${upstreamPath}${requestUrl.search}`, baseUrl.origin);
+}
+
+function buildChatbaseAssetTarget(requestUrl) {
+  return new URL(`${requestUrl.pathname}${requestUrl.search}`, getChatbaseHelpBaseUrl().origin);
+}
+
+function buildChatbaseApiTarget(requestUrl) {
+  return new URL(`${requestUrl.pathname}${requestUrl.search}`, getChatbaseHelpBaseUrl().origin);
+}
+
+function getProxyRequestHeaders(request, targetUrl) {
+  const headers = new Headers();
+
+  for (const [key, value] of Object.entries(request.headers)) {
+    if (value == null) {
+      continue;
+    }
+
+    const lowerKey = key.toLowerCase();
+    if (["host", "content-length", "connection"].includes(lowerKey)) {
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        headers.append(key, item);
+      }
+      continue;
+    }
+
+    headers.set(key, value);
+  }
+
+  headers.set("host", targetUrl.host);
+  headers.set("origin", targetUrl.origin);
+  headers.set("referer", targetUrl.origin);
+
+  return headers;
+}
+
+function getProxyResponseHeaders(upstreamResponse) {
+  const headers = {};
+
+  for (const [key, value] of upstreamResponse.headers.entries()) {
+    if (["content-length", "content-encoding", "transfer-encoding", "connection"].includes(key.toLowerCase())) {
+      continue;
+    }
+
+    headers[key] = value;
+  }
+
+  return headers;
+}
+
+function getInjectedChatbaseOverrides() {
+  return `
+    <style id="nesh-chatbase-sidebar-overrides">
+      [data-slot="sidebar-wrapper"] {
+        --sidebar-width: 0px !important;
+        --sidebar-width-icon: 0px !important;
+      }
+
+      [data-slot="sidebar-wrapper"] > [data-slot="sidebar"],
+      [data-slot="sidebar-gap"],
+      [data-slot="sidebar-container"] {
+        display: none !important;
+        width: 0 !important;
+        min-width: 0 !important;
+      }
+
+      [data-slot="sidebar-wrapper"] > main {
+        border-left: 0 !important;
+      }
+
+      header.sticky button[data-slot="button"] {
+        display: none !important;
+      }
+    </style>
+    <script id="nesh-chatbase-sidebar-script">
+      (() => {
+        const hideSidebar = () => {
+          document.querySelectorAll('[data-slot="sidebar"], [data-slot="sidebar-gap"], [data-slot="sidebar-container"]').forEach((element) => {
+            element.style.display = 'none';
+            element.style.width = '0';
+            element.style.minWidth = '0';
+          });
+
+          document.querySelectorAll('[data-slot="sidebar-wrapper"]').forEach((element) => {
+            element.style.setProperty('--sidebar-width', '0px');
+            element.style.setProperty('--sidebar-width-icon', '0px');
+          });
+
+          document.querySelectorAll('header.sticky button[data-slot="button"]').forEach((element) => {
+            element.style.display = 'none';
+          });
+        };
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', hideSidebar, { once: true });
+        } else {
+          hideSidebar();
+        }
+
+        new MutationObserver(hideSidebar).observe(document.documentElement, {
+          childList: true,
+          subtree: true
+        });
+      })();
+    </script>
+  `.trim();
+}
+
+function injectChatbaseOverrides(html) {
+  const injection = getInjectedChatbaseOverrides();
+  if (html.includes("nesh-chatbase-sidebar-overrides")) {
+    return html;
+  }
+
+  if (html.includes("</head>")) {
+    return html.replace("</head>", `${injection}</head>`);
+  }
+
+  return `${injection}${html}`;
+}
+
+async function proxyChatbaseRequest(request, response, targetUrl, options = {}) {
+  const upstreamResponse = await fetch(targetUrl, {
+    method: request.method,
+    headers: getProxyRequestHeaders(request, targetUrl),
+    body: request.method === "GET" || request.method === "HEAD" ? undefined : request,
+    duplex: request.method === "GET" || request.method === "HEAD" ? undefined : "half",
+    redirect: "manual"
+  });
+
+  const headers = getProxyResponseHeaders(upstreamResponse);
+  const contentType = upstreamResponse.headers.get("content-type") || "";
+
+  if (options.injectHtml && contentType.includes("text/html")) {
+    const html = injectChatbaseOverrides(await upstreamResponse.text());
+    headers["content-type"] = "text/html; charset=utf-8";
+    response.writeHead(upstreamResponse.status, headers);
+    response.end(html);
+    return;
+  }
+
+  const body = Buffer.from(await upstreamResponse.arrayBuffer());
+  response.writeHead(upstreamResponse.status, headers);
+  response.end(body);
 }
 
 function normalizeAllowedOrigin(origin) {
@@ -461,6 +627,28 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  if (requestUrl.pathname === "/chatbase-help" || requestUrl.pathname.startsWith("/chatbase-help/")) {
+    try {
+      await proxyChatbaseRequest(request, response, buildChatbaseHelpTarget(requestUrl), {
+        injectHtml: true
+      });
+      return;
+    } catch (error) {
+      sendJson(response, 502, { error: `Chatbase help proxy failed: ${error.message}` }, origin);
+      return;
+    }
+  }
+
+  if (requestUrl.pathname.startsWith("/__cb/")) {
+    try {
+      await proxyChatbaseRequest(request, response, buildChatbaseAssetTarget(requestUrl));
+      return;
+    } catch (error) {
+      sendJson(response, 502, { error: `Chatbase asset proxy failed: ${error.message}` }, origin);
+      return;
+    }
+  }
+
   if (request.method === "POST" && requestUrl.pathname === "/api/chat") {
     try {
       let rawBody = "";
@@ -504,6 +692,16 @@ const server = createServer(async (request, response) => {
       return;
     } catch (error) {
       sendJson(response, 500, { error: error.message }, origin);
+      return;
+    }
+  }
+
+  if (requestUrl.pathname.startsWith("/api/chat/")) {
+    try {
+      await proxyChatbaseRequest(request, response, buildChatbaseApiTarget(requestUrl));
+      return;
+    } catch (error) {
+      sendJson(response, 502, { error: `Chatbase API proxy failed: ${error.message}` }, origin);
       return;
     }
   }

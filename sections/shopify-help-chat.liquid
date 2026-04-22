@@ -1,13 +1,19 @@
 {% liquid
   assign section_id = 'shopify-help-chat-' | append: section.id
+  assign chatbase_proxy_url = section.settings.chatbase_proxy_url | default: 'https://shopify-help-chat.onrender.com/chatbase-help'
   assign chatbase_url = section.settings.chatbase_url | default: 'https://www.chatbase.co/iQxwux6_Bjma9xxVgm8Nb/help'
+  assign iframe_url = chatbase_proxy_url
+
+  if iframe_url == blank
+    assign iframe_url = chatbase_url
+  endif
 %}
 
 <section class="shopify-chatbase-help" id="{{ section_id }}">
-  {% if chatbase_url != blank %}
+  {% if iframe_url != blank %}
     <iframe
       class="shopify-chatbase-help__frame"
-      src="{{ chatbase_url | escape }}"
+      src="{{ iframe_url | escape }}"
       title="Help page"
       loading="lazy"
       allow="clipboard-write; microphone"
@@ -101,9 +107,15 @@
   "settings": [
     {
       "type": "url",
+      "id": "chatbase_proxy_url",
+      "label": "Chatbase proxy URL",
+      "info": "Recommended. Paste your proxied help page URL, for example https://shopify-help-chat.onrender.com/chatbase-help"
+    },
+    {
+      "type": "url",
       "id": "chatbase_url",
-      "label": "Chatbase help page URL",
-      "info": "Paste your Chatbase help page URL, for example https://www.chatbase.co/your-agent-id/help"
+      "label": "Direct Chatbase help page URL",
+      "info": "Optional fallback. Paste your direct Chatbase help page URL if you are not using the proxy."
     }
   ],
   "presets": [

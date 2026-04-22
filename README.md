@@ -2,9 +2,8 @@
 
 This project gives you:
 
-- A white help page with a centered prompt and text box
-- A browser chat UI that sends the full conversation to a backend
-- A small Node server that calls the OpenAI Responses API
+- A Node server for your Shopify help page and OpenAI bridge
+- A proxied Chatbase help page route you can host on your own backend
 - Optional live Shopify product lookup through the Storefront API
 - Vector store search through `file_search`
 - Optional web fallback through `web_search`
@@ -12,8 +11,8 @@ This project gives you:
 
 ## Files
 
-- `help-page.html` - the storefront page
-- `server.mjs` - the backend proxy for OpenAI
+- `help-page.html` - standalone iframe entrypoint for the proxied Chatbase help page
+- `server.mjs` - the backend proxy for OpenAI and Chatbase help page routes
 - `.env.example` - environment variables you need
 - `.env.deploy.example` - deployment-ready environment template
 - `sections/shopify-help-chat.liquid` - Shopify section
@@ -28,6 +27,7 @@ This project gives you:
 4. Add your Shopify store domain, for example `your-store.myshopify.com`
 5. Add a Shopify Storefront API access token
 6. Set `SHOPIFY_STOREFRONT_ORIGIN` to your store domain
+7. Optionally set `CHATBASE_HELP_URL` if you want to proxy a different Chatbase help page
 7. Start the server with Node 18+:
 
 ```powershell
@@ -44,14 +44,34 @@ For Shopify, keep the OpenAI call on your backend, not in theme code.
 - Upload `sections/shopify-help-chat.liquid` to your theme `sections` folder
 - Upload `templates/page.help-chat.json` to your theme `templates` folder
 - In Shopify Admin, create a page and assign the `help-chat` template
-- In the theme editor, open that page template and paste your backend URL into the section setting named `Backend API URL`
+- In the theme editor, open that page template and paste your backend route into the section setting named `Chatbase proxy URL`
+
+## Chatbase help proxy
+
+The server now includes a simple Chatbase help-page proxy so you can serve the Chatbase help UI through your own backend and hide the desktop recent-chats sidebar.
+
+- Proxied help page route: `/chatbase-help`
+- Proxied Chatbase assets: `/__cb/*`
+- Proxied Chatbase help-page API calls: `/api/chat/{agentId}/*`
+
+By default, the proxy uses:
+
+```txt
+https://www.chatbase.co/iQxwux6_Bjma9xxVgm8Nb/help
+```
+
+You can override that by setting:
+
+```txt
+CHATBASE_HELP_URL=https://www.chatbase.co/your-agent-id/help
+```
 
 If you prefer to embed the browser version manually, you can still use `help-page.html`.
 
 ## What the Shopify files do
 
-- The section renders the all-white centered help page directly in your theme
-- The heading, intro text, placeholder text, and backend URL are editable in the theme editor
+- The section renders a full-page iframe of your proxied Chatbase help page
+- The proxy URL and optional direct Chatbase URL are editable in the theme editor
 - The page template loads only that section, making the help page clean and centered
 
 ## Shopify product data
@@ -68,6 +88,7 @@ To enable this, create a Storefront API token in Shopify with product listing re
 - `SHOPIFY_STORE_DOMAIN`
 - `SHOPIFY_STOREFRONT_ACCESS_TOKEN`
 - `SHOPIFY_API_VERSION`
+- `SHOPIFY_STOREFRONT_ORIGIN`
 
 More detail is in `SHOPIFY_TOKEN_SETUP.md`.
 
@@ -86,6 +107,9 @@ More detail is in `SHOPIFY_TOKEN_SETUP.md`.
 - The assistant can search your vector store automatically.
 - If `ENABLE_WEB_SEARCH=true`, it can also use web search when needed.
 - If Shopify credentials are not configured, the app still works with OpenAI plus your vector store.
+- `SHOPIFY_STOREFRONT_ORIGIN` must match the exact storefront origin that loads the page, including `https://`.
+- If you use both a `myshopify.com` domain and a custom storefront domain, set `SHOPIFY_STOREFRONT_ORIGIN` to a comma-separated list such as `https://store.example.com,https://your-store.myshopify.com`.
+- If you use the Chatbase proxy route, your Shopify iframe should point to your backend domain, for example `https://shopify-help-chat.onrender.com/chatbase-help`.
 
 ## OpenAI docs used
 
