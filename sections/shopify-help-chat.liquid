@@ -1,430 +1,226 @@
 {% liquid
   assign section_id = 'shopify-help-chat-' | append: section.id
-  assign heading = section.settings.heading | default: 'Find the right part faster'
-  assign intro_message = section.settings.intro_message | default: 'Ask about parts, compatibility, shipping, or availability and get help in a few seconds.'
-  assign placeholder = section.settings.placeholder | default: 'Ask about a part number, brand, or problem'
+  assign heading = section.settings.heading | default: 'How can I help you today?'
+  assign intro_message = section.settings.intro_message | default: 'Ask about parts, model numbers, compatibility, shipping, or availability.'
+  assign placeholder = section.settings.placeholder | default: 'Ask me anything...'
   assign api_url = section.settings.api_url
 %}
 
 <section class="shopify-help-chat" id="{{ section_id }}">
-  <div class="shopify-help-chat__backdrop"></div>
-
   <div class="shopify-help-chat__inner">
     <div class="shopify-help-chat__hero">
-      <p class="shopify-help-chat__eyebrow">New England Supply House</p>
       <h1 class="shopify-help-chat__heading">{{ heading | escape }}</h1>
-      <p class="shopify-help-chat__lede">{{ intro_message | escape }}</p>
-
-      <div class="shopify-help-chat__prompt-row">
-        <button type="button" class="shopify-help-chat__prompt" data-help-prompt="I need help finding a replacement part">
-          Find a replacement part
-        </button>
-        <button type="button" class="shopify-help-chat__prompt" data-help-prompt="Do you have this part in stock?">
-          Check availability
-        </button>
-        <button type="button" class="shopify-help-chat__prompt" data-help-prompt="Can you help me match this model number?">
-          Match a model number
-        </button>
-      </div>
+      <p class="shopify-help-chat__subheading">{{ intro_message | escape }}</p>
     </div>
 
-    <div class="shopify-help-chat__layout">
-      <aside class="shopify-help-chat__panel shopify-help-chat__panel--info">
-        <div class="shopify-help-chat__info-block">
-          <h2 class="shopify-help-chat__panel-title">Good things to include</h2>
-          <ul class="shopify-help-chat__tips">
-            <li>Part number or model number</li>
-            <li>Brand and equipment type</li>
-            <li>What problem you are trying to solve</li>
-            <li>Whether you need it in stock right away</li>
-          </ul>
-        </div>
+    <div class="shopify-help-chat__composer-wrap">
+      <div class="shopify-help-chat__glow" aria-hidden="true"></div>
 
-        <div class="shopify-help-chat__info-block">
-          <h2 class="shopify-help-chat__panel-title">Popular questions</h2>
-          <div class="shopify-help-chat__faq-list">
-            <button type="button" class="shopify-help-chat__faq" data-help-prompt="Can you help me match this part number to a replacement?">
-              Match a replacement
-            </button>
-            <button type="button" class="shopify-help-chat__faq" data-help-prompt="Do you have this item in stock and ready to ship?">
-              Check stock and shipping
-            </button>
-            <button type="button" class="shopify-help-chat__faq" data-help-prompt="What information do you need to identify the correct part?">
-              What should I send you?
-            </button>
-          </div>
-        </div>
-
-        <div class="shopify-help-chat__info-card">
-          <p class="shopify-help-chat__info-card-label">Best Results</p>
-          <p class="shopify-help-chat__info-card-text">Include a model number, a part number, or a clear photo reference when possible.</p>
-        </div>
-      </aside>
-
-      <div class="shopify-help-chat__panel shopify-help-chat__panel--chat">
-        <div class="shopify-help-chat__messages" data-help-messages>
+      <div class="shopify-help-chat__shell">
+        <div class="shopify-help-chat__messages" data-help-messages hidden>
           <article class="shopify-help-chat__message shopify-help-chat__message--assistant">
-            <span class="shopify-help-chat__avatar" aria-hidden="true">AI</span>
-            <div class="shopify-help-chat__bubble">
-              <p class="shopify-help-chat__message-label">Assistant</p>
-              <p class="shopify-help-chat__message-text">{{ intro_message | escape }}</p>
-            </div>
+            <p class="shopify-help-chat__message-text">{{ intro_message | escape }}</p>
           </article>
         </div>
 
-        <form class="shopify-help-chat__composer" data-help-form>
-          <label class="shopify-help-chat__label" for="{{ section_id }}-input">Describe what you need</label>
-          <div class="shopify-help-chat__input-row">
-            <input
-              class="shopify-help-chat__input"
-              data-help-input
-              id="{{ section_id }}-input"
-              type="text"
-              aria-label="Parts help chat"
-              autocomplete="off"
-              placeholder="{{ placeholder | escape }}"
-            >
-            <button class="shopify-help-chat__send" type="submit">Send</button>
+        <form class="shopify-help-chat__form" data-help-form>
+          <label class="shopify-help-chat__sr-only" for="{{ section_id }}-input">Ask a question</label>
+          <textarea
+            class="shopify-help-chat__input"
+            data-help-input
+            id="{{ section_id }}-input"
+            rows="3"
+            aria-label="Ask a question"
+            placeholder="{{ placeholder | escape }}"
+          ></textarea>
+
+          <div class="shopify-help-chat__actions">
+            <span class="shopify-help-chat__hint">Press Enter to send</span>
+            <button class="shopify-help-chat__send" type="submit" aria-label="Send question">
+              <span class="shopify-help-chat__send-icon">||</span>
+            </button>
           </div>
         </form>
-
-        <p class="shopify-help-chat__status" data-help-status></p>
       </div>
     </div>
+
+    <p class="shopify-help-chat__status" data-help-status></p>
   </div>
 </section>
 
 <style>
   #{{ section_id }} {
-    --help-page-bg: linear-gradient(180deg, #f3ede1 0%, #faf7f1 35%, #ffffff 100%);
-    --help-panel: rgba(255, 255, 255, 0.88);
-    --help-panel-strong: #ffffff;
-    --help-border: rgba(26, 40, 33, 0.12);
-    --help-border-strong: rgba(26, 40, 33, 0.22);
-    --help-text: #173327;
-    --help-muted: #5d6c64;
-    --help-accent: #204f3a;
-    --help-accent-2: #b77933;
-    --help-accent-soft: #e6efe9;
-    --help-user: #f3efe6;
-    --help-shadow: 0 28px 60px rgba(32, 50, 40, 0.10);
+    --help-bg: #08080b;
+    --help-shell: #1a1a1f;
+    --help-shell-border: rgba(255, 255, 255, 0.08);
+    --help-text: #f5f5f7;
+    --help-muted: #9b9ca3;
+    --help-placeholder: #b6b8c3;
+    --help-button: #ffffff;
+    --help-button-text: #121216;
     position: relative;
+    min-height: 100vh;
     overflow: hidden;
-    background: var(--help-page-bg);
+    background: var(--help-bg);
     color: var(--help-text);
-    padding: 56px 18px 72px;
+    padding: 40px 16px 80px;
   }
 
   #{{ section_id }} * {
     box-sizing: border-box;
   }
 
-  #{{ section_id }} .shopify-help-chat__backdrop {
-    position: absolute;
-    inset: 0;
-    background:
-      radial-gradient(circle at top left, rgba(53, 114, 82, 0.12), transparent 34%),
-      radial-gradient(circle at bottom right, rgba(181, 133, 73, 0.12), transparent 28%);
-    pointer-events: none;
-  }
-
   #{{ section_id }} .shopify-help-chat__inner {
-    position: relative;
-    width: min(1160px, 100%);
+    width: min(980px, 100%);
     margin: 0 auto;
+    min-height: calc(100vh - 120px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
   }
 
   #{{ section_id }} .shopify-help-chat__hero {
     text-align: center;
-    margin-bottom: 26px;
-    animation: helpFadeUp 500ms ease;
-  }
-
-  #{{ section_id }} .shopify-help-chat__eyebrow {
-    margin: 0 0 10px;
-    color: var(--help-accent);
-    font-size: 0.84rem;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
+    margin-bottom: 28px;
   }
 
   #{{ section_id }} .shopify-help-chat__heading {
     margin: 0;
-    font-size: clamp(2.4rem, 4vw, 4.4rem);
-    line-height: 0.98;
-    letter-spacing: -0.04em;
+    font-size: clamp(2.5rem, 5vw, 4.2rem);
+    line-height: 1.02;
+    letter-spacing: -0.05em;
     font-weight: 700;
     text-wrap: balance;
   }
 
-  #{{ section_id }} .shopify-help-chat__lede {
-    width: min(680px, 100%);
-    margin: 16px auto 0;
-    font-size: 1.08rem;
-    line-height: 1.65;
+  #{{ section_id }} .shopify-help-chat__subheading {
+    margin: 14px 0 0;
     color: var(--help-muted);
-  }
-
-  #{{ section_id }} .shopify-help-chat__prompt-row {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px;
-    margin-top: 22px;
-  }
-
-  #{{ section_id }} .shopify-help-chat__prompt {
-    border: 1px solid var(--help-border);
-    background: rgba(255, 255, 255, 0.72);
-    color: var(--help-text);
-    border-radius: 999px;
-    padding: 11px 16px;
-    font: inherit;
-    font-size: 0.95rem;
-    cursor: pointer;
-    transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
-  }
-
-  #{{ section_id }} .shopify-help-chat__prompt:hover,
-  #{{ section_id }} .shopify-help-chat__prompt:focus-visible {
-    transform: translateY(-1px);
-    border-color: var(--help-border-strong);
-    background: #ffffff;
-    outline: none;
-  }
-
-  #{{ section_id }} .shopify-help-chat__layout {
-    display: grid;
-    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
-    gap: 18px;
-    align-items: start;
-    animation: helpFadeUp 640ms ease;
-  }
-
-  #{{ section_id }} .shopify-help-chat__panel {
-    border: 1px solid var(--help-border);
-    background: var(--help-panel);
-    backdrop-filter: blur(12px);
-    border-radius: 28px;
-    box-shadow: var(--help-shadow);
-  }
-
-  #{{ section_id }} .shopify-help-chat__panel--info {
-    padding: 24px 22px;
-    position: sticky;
-    top: 24px;
-  }
-
-  #{{ section_id }} .shopify-help-chat__info-block + .shopify-help-chat__info-block {
-    margin-top: 22px;
-    padding-top: 20px;
-    border-top: 1px solid rgba(26, 40, 33, 0.10);
-  }
-
-  #{{ section_id }} .shopify-help-chat__panel-title {
-    margin: 0 0 14px;
-    font-size: 1.08rem;
-    letter-spacing: -0.02em;
-  }
-
-  #{{ section_id }} .shopify-help-chat__tips {
-    margin: 0;
-    padding-left: 18px;
-    color: var(--help-muted);
-    line-height: 1.75;
-  }
-
-  #{{ section_id }} .shopify-help-chat__faq-list {
-    display: grid;
-    gap: 10px;
-  }
-
-  #{{ section_id }} .shopify-help-chat__faq {
-    width: 100%;
-    text-align: left;
-    border: 1px solid var(--help-border);
-    border-radius: 16px;
-    background: #ffffff;
-    color: var(--help-text);
-    padding: 13px 14px;
-    font: inherit;
-    line-height: 1.45;
-    cursor: pointer;
-    transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
-  }
-
-  #{{ section_id }} .shopify-help-chat__faq:hover,
-  #{{ section_id }} .shopify-help-chat__faq:focus-visible {
-    transform: translateY(-1px);
-    border-color: var(--help-border-strong);
-    box-shadow: 0 12px 26px rgba(23, 51, 39, 0.08);
-    outline: none;
-  }
-
-  #{{ section_id }} .shopify-help-chat__info-card {
-    margin-top: 22px;
-    padding: 16px 16px 14px;
-    border-radius: 18px;
-    background: linear-gradient(135deg, rgba(32, 79, 58, 0.95), rgba(46, 91, 69, 0.95));
-    color: #ffffff;
-  }
-
-  #{{ section_id }} .shopify-help-chat__info-card-label {
-    margin: 0 0 8px;
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    opacity: 0.86;
-  }
-
-  #{{ section_id }} .shopify-help-chat__info-card-text {
-    margin: 0;
+    font-size: 1rem;
     line-height: 1.6;
-    font-size: 0.96rem;
   }
 
-  #{{ section_id }} .shopify-help-chat__panel--chat {
-    padding: 18px;
-    background: var(--help-panel-strong);
+  #{{ section_id }} .shopify-help-chat__composer-wrap {
+    position: relative;
+    width: min(940px, 100%);
   }
 
-  #{{ section_id }} .shopify-help-chat__panel--chat::before {
-    content: "";
-    display: block;
-    height: 4px;
-    width: 92px;
+  #{{ section_id }} .shopify-help-chat__glow {
+    position: absolute;
+    left: 6%;
+    right: 6%;
+    bottom: -18px;
+    height: 56px;
     border-radius: 999px;
-    background: linear-gradient(90deg, var(--help-accent), var(--help-accent-2));
-    margin-bottom: 14px;
+    background: linear-gradient(
+      90deg,
+      rgba(132, 70, 255, 0.32) 0%,
+      rgba(223, 82, 160, 0.30) 24%,
+      rgba(255, 143, 84, 0.28) 46%,
+      rgba(163, 217, 74, 0.28) 68%,
+      rgba(67, 190, 255, 0.30) 100%
+    );
+    filter: blur(28px);
+    opacity: 0.95;
+    pointer-events: none;
+  }
+
+  #{{ section_id }} .shopify-help-chat__shell {
+    position: relative;
+    border: 1px solid var(--help-shell-border);
+    border-radius: 28px;
+    background: var(--help-shell);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    padding: 18px 18px 16px;
   }
 
   #{{ section_id }} .shopify-help-chat__messages {
-    min-height: 360px;
-    max-height: 560px;
+    max-height: 260px;
     overflow-y: auto;
-    padding: 6px 4px 10px;
+    margin-bottom: 12px;
+    padding: 6px 4px;
   }
 
   #{{ section_id }} .shopify-help-chat__message {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    margin: 0 0 14px;
+    margin: 0 0 10px;
   }
 
   #{{ section_id }} .shopify-help-chat__message:last-child {
     margin-bottom: 0;
   }
 
-  #{{ section_id }} .shopify-help-chat__message--user {
-    flex-direction: row-reverse;
-  }
-
-  #{{ section_id }} .shopify-help-chat__avatar {
-    flex: 0 0 auto;
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    display: inline-grid;
-    place-items: center;
-    background: var(--help-accent);
-    color: #ffffff;
-    font-size: 0.76rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-  }
-
-  #{{ section_id }} .shopify-help-chat__message--user .shopify-help-chat__avatar {
-    background: #d8e2db;
-    color: var(--help-text);
-  }
-
-  #{{ section_id }} .shopify-help-chat__bubble {
-    max-width: min(720px, calc(100% - 52px));
-    padding: 14px 16px;
-    border-radius: 18px;
-    border: 1px solid var(--help-border);
-    background: var(--help-accent-soft);
-  }
-
-  #{{ section_id }} .shopify-help-chat__message--user .shopify-help-chat__bubble {
-    background: var(--help-user);
-  }
-
-  #{{ section_id }} .shopify-help-chat__message-label {
-    margin: 0 0 6px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--help-accent);
-  }
-
-  #{{ section_id }} .shopify-help-chat__message--user .shopify-help-chat__message-label {
-    color: var(--help-muted);
-  }
-
   #{{ section_id }} .shopify-help-chat__message-text {
     margin: 0;
+    color: var(--help-text);
     white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.65;
   }
 
   #{{ section_id }} .shopify-help-chat__message-text a {
-    color: var(--help-accent);
-    font-weight: 700;
+    color: #d9defd;
     text-decoration: underline;
     text-underline-offset: 2px;
   }
 
-  #{{ section_id }} .shopify-help-chat__composer {
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid rgba(26, 40, 33, 0.10);
+  #{{ section_id }} .shopify-help-chat__form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
   }
 
-  #{{ section_id }} .shopify-help-chat__label {
-    display: block;
-    margin-bottom: 8px;
-    font-size: 0.9rem;
-    color: var(--help-muted);
-  }
-
-  #{{ section_id }} .shopify-help-chat__input-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 10px;
+  #{{ section_id }} .shopify-help-chat__sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   #{{ section_id }} .shopify-help-chat__input {
     width: 100%;
-    min-height: 58px;
-    padding: 16px 18px;
-    border: 1px solid var(--help-border);
-    border-radius: 16px;
-    font-size: 1rem;
+    min-height: 116px;
+    resize: none;
+    border: 0;
     outline: none;
-    background: #ffffff;
+    background: transparent;
     color: var(--help-text);
+    font: inherit;
+    font-size: clamp(1.1rem, 2vw, 1.25rem);
+    line-height: 1.5;
+    padding: 0 8px;
   }
 
-  #{{ section_id }} .shopify-help-chat__input:focus {
-    border-color: var(--help-accent);
-    box-shadow: 0 0 0 4px rgba(32, 79, 58, 0.10);
+  #{{ section_id }} .shopify-help-chat__input::placeholder {
+    color: var(--help-placeholder);
+  }
+
+  #{{ section_id }} .shopify-help-chat__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  #{{ section_id }} .shopify-help-chat__hint {
+    color: var(--help-muted);
+    font-size: 0.92rem;
   }
 
   #{{ section_id }} .shopify-help-chat__send {
-    min-width: 108px;
+    width: 48px;
+    height: 48px;
     border: 0;
     border-radius: 16px;
-    padding: 0 18px;
-    background: var(--help-accent);
-    color: #ffffff;
-    font: inherit;
-    font-weight: 700;
+    background: var(--help-button);
+    color: var(--help-button-text);
+    display: inline-grid;
+    place-items: center;
     cursor: pointer;
     transition: transform 140ms ease, opacity 140ms ease;
   }
@@ -438,67 +234,56 @@
 
   #{{ section_id }} .shopify-help-chat__send:disabled,
   #{{ section_id }} .shopify-help-chat__input:disabled {
-    opacity: 0.65;
+    opacity: 0.62;
     cursor: wait;
   }
 
+  #{{ section_id }} .shopify-help-chat__send-icon {
+    display: inline-block;
+    transform: rotate(90deg);
+    font-weight: 700;
+    letter-spacing: -0.1em;
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+
   #{{ section_id }} .shopify-help-chat__status {
-    margin: 12px 2px 0;
+    margin: 18px 0 0;
     min-height: 20px;
     color: var(--help-muted);
     font-size: 0.92rem;
-  }
-
-  @keyframes helpFadeUp {
-    from {
-      opacity: 0;
-      transform: translateY(12px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @media (max-width: 920px) {
-    #{{ section_id }} {
-      padding: 40px 14px 56px;
-    }
-
-    #{{ section_id }} .shopify-help-chat__layout {
-      grid-template-columns: 1fr;
-    }
-
-    #{{ section_id }} .shopify-help-chat__panel--info {
-      position: static;
-    }
+    text-align: center;
   }
 
   @media (max-width: 640px) {
-    #{{ section_id }} .shopify-help-chat__heading {
-      font-size: clamp(2rem, 12vw, 2.9rem);
+    #{{ section_id }} {
+      padding: 28px 14px 64px;
     }
 
-    #{{ section_id }} .shopify-help-chat__lede {
-      font-size: 1rem;
+    #{{ section_id }} .shopify-help-chat__inner {
+      min-height: calc(100vh - 92px);
     }
 
-    #{{ section_id }} .shopify-help-chat__panel--chat,
-    #{{ section_id }} .shopify-help-chat__panel--info {
-      border-radius: 22px;
+    #{{ section_id }} .shopify-help-chat__hero {
+      margin-bottom: 22px;
     }
 
-    #{{ section_id }} .shopify-help-chat__messages {
-      min-height: 300px;
-      max-height: 460px;
+    #{{ section_id }} .shopify-help-chat__subheading {
+      font-size: 0.95rem;
     }
 
-    #{{ section_id }} .shopify-help-chat__input-row {
-      grid-template-columns: 1fr;
+    #{{ section_id }} .shopify-help-chat__shell {
+      border-radius: 24px;
+      padding: 16px 14px 14px;
     }
 
-    #{{ section_id }} .shopify-help-chat__send {
-      min-height: 54px;
+    #{{ section_id }} .shopify-help-chat__input {
+      min-height: 96px;
+      font-size: 1.06rem;
+    }
+
+    #{{ section_id }} .shopify-help-chat__hint {
+      font-size: 0.86rem;
     }
   }
 </style>
@@ -517,7 +302,6 @@
     const formEl = root.querySelector("[data-help-form]");
     const inputEl = root.querySelector("[data-help-input]");
     const statusEl = root.querySelector("[data-help-status]");
-    const promptEls = root.querySelectorAll("[data-help-prompt]");
     const sendButton = formEl.querySelector(".shopify-help-chat__send");
     const conversation = [];
 
@@ -557,31 +341,14 @@
 
     function renderMessage(role, text) {
       const article = document.createElement("article");
-      article.className = "shopify-help-chat__message " + (role === "user"
-        ? "shopify-help-chat__message--user"
-        : "shopify-help-chat__message--assistant");
-
-      const avatar = document.createElement("span");
-      avatar.className = "shopify-help-chat__avatar";
-      avatar.setAttribute("aria-hidden", "true");
-      avatar.textContent = role === "user" ? "You" : "AI";
-
-      const bubble = document.createElement("div");
-      bubble.className = "shopify-help-chat__bubble";
-
-      const label = document.createElement("p");
-      label.className = "shopify-help-chat__message-label";
-      label.textContent = role === "user" ? "You" : "Assistant";
+      article.className = "shopify-help-chat__message shopify-help-chat__message--" + role;
 
       const body = document.createElement("p");
       body.className = "shopify-help-chat__message-text";
       body.appendChild(buildMessageFragments(text));
 
-      bubble.appendChild(label);
-      bubble.appendChild(body);
-      article.appendChild(avatar);
-      article.appendChild(bubble);
-
+      article.appendChild(body);
+      messagesEl.hidden = false;
       messagesEl.appendChild(article);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
@@ -589,13 +356,10 @@
     function setBusy(isBusy) {
       inputEl.disabled = isBusy;
       sendButton.disabled = isBusy;
-      promptEls.forEach((promptEl) => {
-        promptEl.disabled = isBusy;
-      });
     }
 
     async function sendConversation() {
-      statusEl.textContent = "Searching and thinking...";
+      statusEl.textContent = "Thinking...";
 
       const response = await fetch(apiUrl, {
         method: "POST",
@@ -633,7 +397,7 @@
 
         conversation.push({ role: "assistant", content: answer });
         renderMessage("assistant", answer);
-        statusEl.textContent = payload.usedTools || "Ready for your next question.";
+        statusEl.textContent = payload.usedTools || "";
       } catch (error) {
         renderMessage("assistant", error.message);
         statusEl.textContent = "The request did not complete.";
@@ -654,15 +418,17 @@
       await submitText(text);
     });
 
-    promptEls.forEach((promptEl) => {
-      promptEl.addEventListener("click", async () => {
-        const text = promptEl.getAttribute("data-help-prompt");
+    inputEl.addEventListener("keydown", async (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+
+        const text = inputEl.value.trim();
         if (!text) {
           return;
         }
 
         await submitText(text);
-      });
+      }
     });
   })();
 </script>
@@ -675,19 +441,19 @@
       "type": "text",
       "id": "heading",
       "label": "Heading",
-      "default": "Find the right part faster"
+      "default": "How can I help you today?"
     },
     {
       "type": "text",
       "id": "intro_message",
       "label": "Intro message",
-      "default": "Ask about parts, compatibility, shipping, or availability and get help in a few seconds."
+      "default": "Ask about parts, model numbers, compatibility, shipping, or availability."
     },
     {
       "type": "text",
       "id": "placeholder",
       "label": "Input placeholder",
-      "default": "Ask about a part number, brand, or problem"
+      "default": "Ask me anything..."
     },
     {
       "type": "url",
