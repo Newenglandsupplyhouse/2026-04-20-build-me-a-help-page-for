@@ -251,8 +251,13 @@ function getInjectedChatbaseOverrides() {
         display: none !important;
       }
 
-      footer {
-        display: none !important;
+      footer span.select-none.font-medium.text-xs.text-zinc-500\\/90 {
+        font-size: 0 !important;
+      }
+
+      footer span.select-none.font-medium.text-xs.text-zinc-500\\/90::after {
+        content: "Powered by Jason DuBose";
+        font-size: 12px;
       }
 
       main > header + div {
