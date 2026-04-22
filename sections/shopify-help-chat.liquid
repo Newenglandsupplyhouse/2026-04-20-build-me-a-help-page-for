@@ -22,21 +22,25 @@
 
 <style>
   #{{ section_id }} {
-    min-height: 100vh;
+    height: 100dvh;
+    min-height: 100dvh;
     background: #08080b;
     padding: 0;
+    overflow: hidden;
   }
 
   #{{ section_id }} .shopify-chatbase-help__frame {
     display: block;
     width: 100%;
-    min-height: 100vh;
+    height: 100dvh;
+    min-height: 100dvh;
     border: 0;
     background: #08080b;
   }
 
   #{{ section_id }} .shopify-chatbase-help__empty {
-    min-height: 100vh;
+    height: 100dvh;
+    min-height: 100dvh;
     display: grid;
     place-items: center;
     padding: 24px;
@@ -60,6 +64,29 @@
     line-height: 1.6;
   }
 </style>
+
+<script>
+  (() => {
+    const root = document.getElementById({{ section_id | json }});
+    if (!root) {
+      return;
+    }
+
+    const pageRoot = document.documentElement;
+    const body = document.body;
+
+    if (pageRoot) {
+      pageRoot.style.overflow = "hidden";
+      pageRoot.style.height = "100%";
+    }
+
+    if (body) {
+      body.style.overflow = "hidden";
+      body.style.height = "100%";
+      body.style.minHeight = "100%";
+    }
+  })();
+</script>
 
 {% schema %}
 {
