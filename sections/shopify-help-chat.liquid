@@ -52,9 +52,8 @@
     --shopify-help-viewport-height: 100dvh;
     --shopify-help-safe-bottom: env(safe-area-inset-bottom, 0px);
     box-sizing: border-box;
-    padding-top: var(--shopify-help-header-offset);
-    height: var(--shopify-help-viewport-height);
-    min-height: var(--shopify-help-viewport-height);
+    height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
+    min-height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
     position: relative;
     background: #08080b;
     overflow: hidden;
@@ -148,7 +147,7 @@
     #{{ section_id }} .shopify-chatbase-help__reset {
       right: max(12px, env(safe-area-inset-right, 0px));
       bottom: auto;
-      top: calc(var(--shopify-help-header-offset) + 8px);
+      top: 8px;
       min-height: 36px;
       padding: 0 12px;
       font-size: 12px;
