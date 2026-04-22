@@ -3,15 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shopify Help Page</title>
+  <title>Parts Finder</title>
   <style>
     :root {
       color-scheme: light;
-      --page-bg: #ffffff;
-      --text: #111111;
-      --muted: #666666;
-      --border: #dcdcdc;
-      --surface: #ffffff;
+      --page-bg: linear-gradient(180deg, #f3ede1 0%, #faf7f1 35%, #ffffff 100%);
+      --panel: rgba(255, 255, 255, 0.88);
+      --panel-strong: #ffffff;
+      --border: rgba(26, 40, 33, 0.12);
+      --border-strong: rgba(26, 40, 33, 0.22);
+      --text: #173327;
+      --muted: #5d6c64;
+      --accent: #204f3a;
+      --accent-2: #b77933;
+      --accent-soft: #e6efe9;
+      --user: #f3efe6;
+      --shadow: 0 28px 60px rgba(32, 50, 40, 0.10);
     }
 
     * {
@@ -21,73 +28,321 @@
     body {
       margin: 0;
       min-height: 100vh;
-      display: grid;
-      place-items: center;
       background: var(--page-bg);
       color: var(--text);
       font-family: Arial, sans-serif;
     }
 
-    .help-box {
-      width: min(92vw, 680px);
+    .shell {
+      position: relative;
+      overflow: hidden;
+      min-height: 100vh;
+      padding: 56px 18px 72px;
+    }
+
+    .shell::before,
+    .shell::after {
+      content: "";
+      position: absolute;
+      inset: auto;
+      border-radius: 50%;
+      pointer-events: none;
+      filter: blur(12px);
+    }
+
+    .shell::before {
+      width: 420px;
+      height: 420px;
+      left: -140px;
+      top: -120px;
+      background: rgba(53, 114, 82, 0.10);
+    }
+
+    .shell::after {
+      width: 360px;
+      height: 360px;
+      right: -120px;
+      bottom: -100px;
+      background: rgba(181, 133, 73, 0.12);
+    }
+
+    .page {
+      position: relative;
+      width: min(1160px, 100%);
+      margin: 0 auto;
+    }
+
+    .hero {
       text-align: center;
+      margin-bottom: 26px;
+      animation: helpFadeUp 500ms ease;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 0.84rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
     }
 
     h1 {
-      margin: 0 0 18px;
-      font-size: clamp(1.6rem, 2vw, 2.2rem);
-      font-weight: 600;
+      margin: 0;
+      font-size: clamp(2.4rem, 4vw, 4.4rem);
+      line-height: 0.98;
+      letter-spacing: -0.04em;
+      font-weight: 700;
+      text-wrap: balance;
     }
 
-    .chat-shell {
+    .lede {
+      width: min(680px, 100%);
+      margin: 16px auto 0;
+      font-size: 1.08rem;
+      line-height: 1.65;
+      color: var(--muted);
+    }
+
+    .prompt-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .prompt {
       border: 1px solid var(--border);
-      border-radius: 14px;
-      background: var(--surface);
-      padding: 14px;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 11px 16px;
+      font: inherit;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+    }
+
+    .prompt:hover,
+    .prompt:focus-visible {
+      transform: translateY(-1px);
+      border-color: var(--border-strong);
+      background: #ffffff;
+      outline: none;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+      animation: helpFadeUp 640ms ease;
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+    }
+
+    .panel-info {
+      padding: 24px 22px;
+      position: sticky;
+      top: 24px;
+    }
+
+    .info-block + .info-block {
+      margin-top: 22px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(26, 40, 33, 0.10);
+    }
+
+    .panel-info h2 {
+      margin: 0 0 14px;
+      font-size: 1.08rem;
+      letter-spacing: -0.02em;
+    }
+
+    .tips {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.75;
+    }
+
+    .faq-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .faq {
+      width: 100%;
       text-align: left;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: #ffffff;
+      color: var(--text);
+      padding: 13px 14px;
+      font: inherit;
+      line-height: 1.45;
+      cursor: pointer;
+      transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+    }
+
+    .faq:hover,
+    .faq:focus-visible {
+      transform: translateY(-1px);
+      border-color: var(--border-strong);
+      box-shadow: 0 12px 26px rgba(23, 51, 39, 0.08);
+      outline: none;
+    }
+
+    .info-card {
+      margin-top: 22px;
+      padding: 16px 16px 14px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(32, 79, 58, 0.95), rgba(46, 91, 69, 0.95));
+      color: #ffffff;
+    }
+
+    .info-card-label {
+      margin: 0 0 8px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      opacity: 0.86;
+    }
+
+    .info-card-text {
+      margin: 0;
+      line-height: 1.6;
+      font-size: 0.96rem;
+    }
+
+    .panel-chat {
+      padding: 18px;
+      background: var(--panel-strong);
+    }
+
+    .panel-chat::before {
+      content: "";
+      display: block;
+      height: 4px;
+      width: 92px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      margin-bottom: 14px;
     }
 
     .messages {
-      min-height: 80px;
-      max-height: 320px;
+      min-height: 360px;
+      max-height: 560px;
       overflow-y: auto;
-      padding: 8px;
+      padding: 6px 4px 10px;
     }
 
     .message {
-      margin: 0 0 12px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-break: break-word;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin: 0 0 14px;
     }
 
     .message:last-child {
       margin-bottom: 0;
     }
 
-    .message-user strong,
-    .message-assistant strong {
-      display: inline-block;
-      margin-bottom: 4px;
+    .message-user {
+      flex-direction: row-reverse;
     }
 
-    .message-assistant {
+    .avatar {
+      flex: 0 0 auto;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      display: inline-grid;
+      place-items: center;
+      background: var(--accent);
+      color: #ffffff;
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .message-user .avatar {
+      background: #d8e2db;
       color: var(--text);
     }
 
-    .message-user {
+    .bubble {
+      max-width: min(720px, calc(100% - 52px));
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: var(--accent-soft);
+    }
+
+    .message-user .bubble {
+      background: var(--user);
+    }
+
+    .message-label {
+      margin: 0 0 6px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .message-user .message-label {
       color: var(--muted);
     }
 
+    .message-text {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.65;
+    }
+
+    .message-text a {
+      color: var(--accent);
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
     form {
-      margin-top: 12px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(26, 40, 33, 0.10);
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .input-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
     }
 
     input {
       width: 100%;
+      min-height: 58px;
       padding: 16px 18px;
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 16px;
       font-size: 1rem;
       outline: none;
       background: #ffffff;
@@ -95,38 +350,169 @@
     }
 
     input:focus {
-      border-color: #111111;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(32, 79, 58, 0.10);
+    }
+
+    button.send {
+      min-width: 108px;
+      border: 0;
+      border-radius: 16px;
+      padding: 0 18px;
+      background: var(--accent);
+      color: #ffffff;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 140ms ease, opacity 140ms ease;
+    }
+
+    button.send:hover,
+    button.send:focus-visible {
+      transform: translateY(-1px);
+      opacity: 0.96;
+      outline: none;
+    }
+
+    button:disabled,
+    input:disabled {
+      opacity: 0.65;
+      cursor: wait;
     }
 
     .status {
-      margin-top: 10px;
+      margin: 12px 2px 0;
       min-height: 20px;
       color: var(--muted);
-      font-size: 0.95rem;
+      font-size: 0.92rem;
+    }
+
+    @keyframes helpFadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 920px) {
+      .shell {
+        padding: 40px 14px 56px;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .panel-info {
+        position: static;
+      }
+    }
+
+    @media (max-width: 640px) {
+      h1 {
+        font-size: clamp(2rem, 12vw, 2.9rem);
+      }
+
+      .lede {
+        font-size: 1rem;
+      }
+
+      .panel,
+      .panel-info,
+      .panel-chat {
+        border-radius: 22px;
+      }
+
+      .messages {
+        min-height: 300px;
+        max-height: 460px;
+      }
+
+      .input-row {
+        grid-template-columns: 1fr;
+      }
+
+      button.send {
+        min-height: 54px;
+      }
     }
   </style>
 </head>
 <body>
-  <main class="help-box">
-    <h1>What are you shopping for today?</h1>
+  <main class="shell">
+    <div class="page">
+      <div class="hero">
+        <p class="eyebrow">New England Supply House</p>
+        <h1>Find the right part faster</h1>
+        <p class="lede">Ask about parts, compatibility, shipping, or availability and get help in a few seconds.</p>
 
-    <section class="chat-shell" aria-label="Shopping help">
-      <div class="messages" id="messages">
-        <p class="message message-assistant"><strong>Assistant</strong><br>Ask about products, sizing, shipping, or recommendations.</p>
+        <div class="prompt-row">
+          <button type="button" class="prompt" data-prompt="I need help finding a replacement part">Find a replacement part</button>
+          <button type="button" class="prompt" data-prompt="Do you have this part in stock?">Check availability</button>
+          <button type="button" class="prompt" data-prompt="Can you help me match this model number?">Match a model number</button>
+        </div>
       </div>
 
-      <form id="chat-form">
-        <input
-          id="chat-input"
-          type="text"
-          aria-label="Shopping search"
-          autocomplete="off"
-          placeholder="Type here and press Enter"
-        >
-      </form>
-    </section>
+      <div class="layout">
+        <aside class="panel panel-info">
+          <div class="info-block">
+            <h2>Good things to include</h2>
+            <ul class="tips">
+              <li>Part number or model number</li>
+              <li>Brand and equipment type</li>
+              <li>What problem you are trying to solve</li>
+              <li>Whether you need it in stock right away</li>
+            </ul>
+          </div>
 
-    <p class="status" id="status"></p>
+          <div class="info-block">
+            <h2>Popular questions</h2>
+            <div class="faq-list">
+              <button type="button" class="faq" data-prompt="Can you help me match this part number to a replacement?">Match a replacement</button>
+              <button type="button" class="faq" data-prompt="Do you have this item in stock and ready to ship?">Check stock and shipping</button>
+              <button type="button" class="faq" data-prompt="What information do you need to identify the correct part?">What should I send you?</button>
+            </div>
+          </div>
+
+          <div class="info-card">
+            <p class="info-card-label">Best Results</p>
+            <p class="info-card-text">Include a model number, a part number, or a clear photo reference when possible.</p>
+          </div>
+        </aside>
+
+        <section class="panel panel-chat" aria-label="Parts finder chat">
+          <div class="messages" id="messages">
+            <article class="message message-assistant">
+              <span class="avatar" aria-hidden="true">AI</span>
+              <div class="bubble">
+                <p class="message-label">Assistant</p>
+                <p class="message-text">Ask about parts, compatibility, shipping, or availability and get help in a few seconds.</p>
+              </div>
+            </article>
+          </div>
+
+          <form id="chat-form">
+            <label for="chat-input">Describe what you need</label>
+            <div class="input-row">
+              <input
+                id="chat-input"
+                type="text"
+                aria-label="Parts finder chat"
+                autocomplete="off"
+                placeholder="Ask about a part number, brand, or problem"
+              >
+              <button class="send" type="submit">Send</button>
+            </div>
+          </form>
+
+          <p class="status" id="status"></p>
+        </section>
+      </div>
+    </div>
   </main>
 
   <script>
@@ -135,25 +521,83 @@
     const formEl = document.getElementById("chat-form");
     const inputEl = document.getElementById("chat-input");
     const statusEl = document.getElementById("status");
+    const promptEls = document.querySelectorAll("[data-prompt]");
+    const sendButton = formEl.querySelector(".send");
     const conversation = [];
 
-    function renderMessage(role, text) {
-      const wrapper = document.createElement("p");
-      wrapper.className = "message " + (role === "user" ? "message-user" : "message-assistant");
+    function buildMessageFragments(text) {
+      const fragment = document.createDocumentFragment();
+      const urlPattern = /(https?:\/\/[^\s]+)/g;
+      const lines = String(text).split("\n");
 
-      const title = document.createElement("strong");
+      lines.forEach((line, lineIndex) => {
+        let lastIndex = 0;
+        line.replace(urlPattern, (match, _group, offset) => {
+          if (offset > lastIndex) {
+            fragment.appendChild(document.createTextNode(line.slice(lastIndex, offset)));
+          }
+
+          const link = document.createElement("a");
+          link.href = match;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = match;
+          fragment.appendChild(link);
+          lastIndex = offset + match.length;
+          return match;
+        });
+
+        if (lastIndex < line.length) {
+          fragment.appendChild(document.createTextNode(line.slice(lastIndex)));
+        }
+
+        if (lineIndex < lines.length - 1) {
+          fragment.appendChild(document.createElement("br"));
+        }
+      });
+
+      return fragment;
+    }
+
+    function renderMessage(role, text) {
+      const article = document.createElement("article");
+      article.className = "message " + (role === "user" ? "message-user" : "message-assistant");
+
+      const avatar = document.createElement("span");
+      avatar.className = "avatar";
+      avatar.setAttribute("aria-hidden", "true");
+      avatar.textContent = role === "user" ? "You" : "AI";
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+
+      const title = document.createElement("p");
+      title.className = "message-label";
       title.textContent = role === "user" ? "You" : "Assistant";
 
-      wrapper.appendChild(title);
-      wrapper.appendChild(document.createElement("br"));
-      wrapper.appendChild(document.createTextNode(text));
+      const body = document.createElement("p");
+      body.className = "message-text";
+      body.appendChild(buildMessageFragments(text));
 
-      messagesEl.appendChild(wrapper);
+      bubble.appendChild(title);
+      bubble.appendChild(body);
+      article.appendChild(avatar);
+      article.appendChild(bubble);
+
+      messagesEl.appendChild(article);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    async function sendMessage(text) {
-      statusEl.textContent = "Thinking...";
+    function setBusy(isBusy) {
+      inputEl.disabled = isBusy;
+      sendButton.disabled = isBusy;
+      promptEls.forEach((promptEl) => {
+        promptEl.disabled = isBusy;
+      });
+    }
+
+    async function sendConversation() {
+      statusEl.textContent = "Searching and thinking...";
 
       const response = await fetch(API_URL, {
         method: "POST",
@@ -174,6 +618,28 @@
       return payload;
     }
 
+    async function submitText(text) {
+      conversation.push({ role: "user", content: text });
+      renderMessage("user", text);
+      inputEl.value = "";
+      setBusy(true);
+
+      try {
+        const payload = await sendConversation();
+        const answer = payload.reply || "I couldn't find an answer yet.";
+
+        conversation.push({ role: "assistant", content: answer });
+        renderMessage("assistant", answer);
+        statusEl.textContent = payload.usedTools || "Ready for your next question.";
+      } catch (error) {
+        renderMessage("assistant", error.message);
+        statusEl.textContent = "The request did not complete.";
+      } finally {
+        setBusy(false);
+        inputEl.focus();
+      }
+    }
+
     formEl.addEventListener("submit", async (event) => {
       event.preventDefault();
 
@@ -182,25 +648,18 @@
         return;
       }
 
-      conversation.push({ role: "user", content: text });
-      renderMessage("user", text);
-      inputEl.value = "";
-      inputEl.disabled = true;
+      await submitText(text);
+    });
 
-      try {
-        const payload = await sendMessage(text);
-        const answer = payload.reply || "I couldn't find an answer yet.";
+    promptEls.forEach((promptEl) => {
+      promptEl.addEventListener("click", async () => {
+        const text = promptEl.getAttribute("data-prompt");
+        if (!text) {
+          return;
+        }
 
-        conversation.push({ role: "assistant", content: answer });
-        renderMessage("assistant", answer);
-        statusEl.textContent = payload.usedTools || "";
-      } catch (error) {
-        renderMessage("assistant", error.message);
-        statusEl.textContent = "The request did not complete.";
-      } finally {
-        inputEl.disabled = false;
-        inputEl.focus();
-      }
+        await submitText(text);
+      });
     });
   </script>
 </body>
