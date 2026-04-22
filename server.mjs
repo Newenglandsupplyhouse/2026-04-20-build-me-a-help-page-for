@@ -251,12 +251,16 @@ function getInjectedChatbaseOverrides() {
         display: none !important;
       }
 
+      footer a:has(> span.select-none.font-medium.text-xs.text-zinc-500\\/90) svg {
+        display: none !important;
+      }
+
       footer span.select-none.font-medium.text-xs.text-zinc-500\\/90 {
         font-size: 0 !important;
       }
 
       footer span.select-none.font-medium.text-xs.text-zinc-500\\/90::after {
-        content: "Powered by Jason DuBose";
+        content: "Built by New England Supply House";
         font-size: 12px;
       }
 
