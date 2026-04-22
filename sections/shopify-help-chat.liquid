@@ -227,9 +227,7 @@
         const baseUrl = new URL(initialSrc, window.location.href);
         const freshUrl = new URL(baseUrl.toString());
         freshUrl.searchParams.set("reset", String(Date.now()));
-        const resetUrl = new URL(baseUrl.toString());
-        resetUrl.pathname = "/chatbase-help/reset";
-        resetUrl.search = "";
+        const resetUrl = new URL("/chatbase-help/reset", baseUrl.origin);
         resetUrl.searchParams.set("next", freshUrl.toString());
         frame.setAttribute("src", "about:blank");
         window.setTimeout(() => {
