@@ -147,27 +147,34 @@ function getInjectedChatbaseOverrides() {
         display: none !important;
       }
 
+      .nesh-chatbase-reset-row {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        margin: 0 0 10px;
+      }
+
       .nesh-chatbase-reset {
-        position: absolute;
-        top: 14px;
-        right: 14px;
-        z-index: 30;
         display: inline-flex;
         align-items: center;
+        gap: 8px;
         justify-content: center;
-        width: 36px;
-        height: 36px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        min-height: 38px;
+        padding: 0 14px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
         border-radius: 999px;
         background: rgba(24, 24, 27, 0.92);
         color: #f5f5f7;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
         cursor: pointer;
         transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
       }
 
       .nesh-chatbase-reset:hover {
         background: rgba(39, 39, 42, 0.98);
-        border-color: rgba(255, 255, 255, 0.22);
+        border-color: rgba(255, 255, 255, 0.24);
         transform: translateY(-1px);
       }
 
@@ -177,12 +184,9 @@ function getInjectedChatbaseOverrides() {
       }
 
       .nesh-chatbase-reset svg {
-        width: 16px;
-        height: 16px;
-      }
-
-      [data-slot="chatbot-input-box"] {
-        position: relative;
+        width: 15px;
+        height: 15px;
+        flex: 0 0 auto;
       }
     </style>
     <script id="nesh-chatbase-sidebar-script">
@@ -219,18 +223,23 @@ function getInjectedChatbaseOverrides() {
 
         const addResetButton = () => {
           const inputBox = document.querySelector('[data-slot="chatbot-input-box"]');
-          if (!inputBox || inputBox.querySelector('.nesh-chatbase-reset')) {
+          const inputShell = inputBox?.parentElement;
+          if (!inputBox || !inputShell || inputShell.querySelector('.nesh-chatbase-reset-row')) {
             return;
           }
+
+          const row = document.createElement('div');
+          row.className = 'nesh-chatbase-reset-row';
 
           const button = document.createElement('button');
           button.type = 'button';
           button.className = 'nesh-chatbase-reset';
           button.setAttribute('aria-label', 'Start a new chat');
           button.setAttribute('title', 'Start over');
-          button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 4v7h-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+          button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 4v7h-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Start over</span>';
           button.addEventListener('click', resetChat);
-          inputBox.appendChild(button);
+          row.appendChild(button);
+          inputShell.insertBefore(row, inputBox);
         };
 
         if (document.readyState === 'loading') {
