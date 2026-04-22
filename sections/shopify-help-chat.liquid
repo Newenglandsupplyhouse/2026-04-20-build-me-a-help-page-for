@@ -183,10 +183,11 @@
     const frame = root.querySelector(".shopify-chatbase-help__frame");
     const resetButton = root.querySelector(".shopify-chatbase-help__reset");
     const isMobileViewport = () => window.innerWidth <= 749;
+    const isPortraitMobileViewport = () => isMobileViewport() && window.innerHeight >= window.innerWidth;
     const frameOrigin = frame ? new URL(frame.getAttribute("src"), window.location.href).origin : "";
 
     const setMobileFrameShift = (shift) => {
-      const nextShift = isMobileViewport() ? -Math.max(0, Math.round(Number(shift) || 0)) : 0;
+      const nextShift = (isMobileViewport() && !isPortraitMobileViewport()) ? -Math.max(0, Math.round(Number(shift) || 0)) : 0;
       root.style.setProperty("--shopify-help-mobile-frame-shift", `${nextShift}px`);
     };
 
