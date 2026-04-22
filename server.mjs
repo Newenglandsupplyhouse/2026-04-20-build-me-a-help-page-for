@@ -276,6 +276,63 @@ function getInjectedChatbaseOverrides() {
       }
 
       @media (max-width: 749px) {
+        body,
+        main[data-theme="dark"],
+        main[data-theme="dark"] > header + div {
+          background: #08080b !important;
+        }
+
+        main[data-theme="dark"] > header + div:has([data-has-messages="false"]) {
+          display: block !important;
+          min-height: auto !important;
+          height: auto !important;
+          padding-top: 8px !important;
+        }
+
+        main[data-theme="dark"] > header + div:has([data-has-messages="false"]) > div {
+          display: block !important;
+          min-height: auto !important;
+          height: auto !important;
+          flex: 0 0 auto !important;
+          padding: 0 0 16px !important;
+        }
+
+        main[data-theme="dark"] > header + div:has([data-has-messages="false"]) > div > div {
+          display: block !important;
+          min-height: auto !important;
+          height: auto !important;
+          max-width: none !important;
+          flex: 0 0 auto !important;
+        }
+
+        main[data-theme="dark"] > header + div:has([data-has-messages="false"]) > div > div > div:first-child {
+          display: block !important;
+          min-height: auto !important;
+          height: auto !important;
+          flex: 0 0 auto !important;
+          padding-top: 8px !important;
+        }
+
+        main[data-theme="dark"] > header + div:has([data-has-messages="false"]) > div > div > div:first-child > div:first-child {
+          display: none !important;
+        }
+
+        main[data-theme="dark"] > header + div:has([data-has-messages="false"]) > div > div > div:first-child h1 {
+          margin-top: 0 !important;
+          margin-bottom: 12px !important;
+        }
+
+        main[data-theme="dark"] > header + div:has([data-has-messages="false"]) [data-has-messages="false"] {
+          min-height: auto !important;
+          height: auto !important;
+          flex: 0 0 auto !important;
+        }
+
+        main[data-theme="dark"] > header + div:has([data-has-messages="false"]) [data-has-messages="false"] > div:first-child {
+          min-height: 0 !important;
+          padding-top: 0 !important;
+        }
+
         body.nesh-chatbase-input-active main > header + div,
         body.nesh-chatbase-input-active main > header + div > div {
           min-height: auto !important;
