@@ -575,6 +575,7 @@ function getInjectedChatbaseOverrides() {
 
           const inputRect = inputShell.getBoundingClientRect();
           const wrap = heading.parentElement;
+          const outerWrap = wrap?.parentElement;
           const clampedWidth = Math.max(220, Math.round(inputRect.width));
 
           if (!wrap) {
@@ -582,6 +583,13 @@ function getInjectedChatbaseOverrides() {
           }
 
           try {
+            if (outerWrap) {
+              outerWrap.style.setProperty('display', 'flex', 'important');
+              outerWrap.style.setProperty('justify-content', 'center', 'important');
+              outerWrap.style.setProperty('width', '100%', 'important');
+              outerWrap.style.setProperty('max-width', 'none', 'important');
+            }
+
             wrap.style.setProperty('display', 'block', 'important');
             wrap.style.setProperty('width', clampedWidth + 'px', 'important');
             wrap.style.setProperty('max-width', clampedWidth + 'px', 'important');
@@ -606,33 +614,6 @@ function getInjectedChatbaseOverrides() {
           document.body.classList.toggle('nesh-chatbase-input-active', active);
         };
 
-        const lockViewportToTop = () => {
-          const isEmptyLandingState = !!document.querySelector('[data-has-messages="false"]');
-          const isInputFocused = !!document.activeElement?.matches?.('textarea[data-slot="chatbot-input-box"]');
-
-          if (!isMobileViewport() || !isEmptyLandingState || !isInputFocused) {
-            return;
-          }
-
-          const scrollers = [
-            document.scrollingElement,
-            document.documentElement,
-            document.body,
-            document.querySelector('main'),
-            document.querySelector('[data-slot="sidebar-wrapper"] > main')
-          ].filter(Boolean);
-
-          scrollers.forEach((element) => {
-            try {
-              element.scrollTop = 0;
-            } catch {}
-          });
-
-          try {
-            window.scrollTo(0, 0);
-          } catch {}
-        };
-
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', () => {
             updateMobileViewportHeight();
@@ -640,7 +621,6 @@ function getInjectedChatbaseOverrides() {
             centerLandingHeadingToInput();
             stabilizeLandingLayout();
             forceMobileLandingLayout();
-            lockViewportToTop();
             pullEmptyStateToTop();
             setTimeout(centerLandingHeadingToInput, 120);
           }, { once: true });
@@ -650,7 +630,6 @@ function getInjectedChatbaseOverrides() {
           centerLandingHeadingToInput();
           stabilizeLandingLayout();
           forceMobileLandingLayout();
-          lockViewportToTop();
           pullEmptyStateToTop();
           setTimeout(centerLandingHeadingToInput, 120);
         }
@@ -672,7 +651,6 @@ function getInjectedChatbaseOverrides() {
             updateMobileViewportHeight();
             centerLandingHeadingToInput();
             forceMobileLandingLayout();
-            lockViewportToTop();
             pullEmptyStateToTop();
             setTimeout(stabilizeLandingLayout, 0);
             setTimeout(stabilizeLandingLayout, 120);
@@ -686,9 +664,6 @@ function getInjectedChatbaseOverrides() {
             setTimeout(forceMobileLandingLayout, 0);
             setTimeout(forceMobileLandingLayout, 120);
             setTimeout(forceMobileLandingLayout, 260);
-            setTimeout(lockViewportToTop, 0);
-            setTimeout(lockViewportToTop, 120);
-            setTimeout(lockViewportToTop, 260);
             setTimeout(pullEmptyStateToTop, 0);
             setTimeout(pullEmptyStateToTop, 120);
             setTimeout(pullEmptyStateToTop, 260);
