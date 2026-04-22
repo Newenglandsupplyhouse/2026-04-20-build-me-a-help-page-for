@@ -62,7 +62,7 @@
 
   @media screen and (max-width: 749px) {
     #{{ section_id }} {
-      --shopify-help-header-offset: 96px;
+      --shopify-help-header-offset: 72px;
     }
   }
 
@@ -148,7 +148,7 @@
     #{{ section_id }} .shopify-chatbase-help__reset {
       right: max(12px, env(safe-area-inset-right, 0px));
       bottom: auto;
-      top: calc(var(--shopify-help-header-offset) + 12px);
+      top: calc(var(--shopify-help-header-offset) + 8px);
       min-height: 36px;
       padding: 0 12px;
       font-size: 12px;
@@ -223,8 +223,10 @@
         return Math.max(maxBottom, Math.ceil(rect.bottom));
       }, 0);
 
-      const fallbackOffset = window.innerWidth <= 749 ? 96 : 164;
-      const headerOffset = Math.max(measuredOffset, fallbackOffset);
+      const fallbackOffset = window.innerWidth <= 749 ? 72 : 164;
+      const headerOffset = window.innerWidth <= 749
+        ? (measuredOffset || fallbackOffset)
+        : Math.max(measuredOffset, fallbackOffset);
 
       root.style.setProperty("--shopify-help-header-offset", `${headerOffset}px`);
     };
