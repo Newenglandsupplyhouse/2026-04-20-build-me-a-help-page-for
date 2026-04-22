@@ -284,8 +284,11 @@ function getInjectedChatbaseOverrides() {
       }
 
       main > header + div > div > div > div:first-child h1 {
-        display: block !important;
+        display: flex !important;
         width: 100% !important;
+        max-width: none !important;
+        justify-content: center !important;
+        align-items: center !important;
         margin-left: auto !important;
         margin-right: auto !important;
         text-align: center !important;
