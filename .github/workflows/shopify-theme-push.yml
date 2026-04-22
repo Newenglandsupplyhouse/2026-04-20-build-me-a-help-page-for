@@ -16,7 +16,6 @@ on:
 jobs:
   push-theme:
     runs-on: ubuntu-latest
-    if: ${{ secrets.SHOPIFY_CLI_THEME_TOKEN != '' && secrets.SHOPIFY_THEME_ID != '' && secrets.SHOPIFY_STORE != '' }}
 
     steps:
       - name: Check out repository
@@ -29,6 +28,16 @@ jobs:
 
       - name: Install Shopify CLI
         run: npm install -g @shopify/cli@latest
+
+      - name: Validate required secrets
+        env:
+          SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_CLI_THEME_TOKEN }}
+          SHOPIFY_THEME_ID: ${{ secrets.SHOPIFY_THEME_ID }}
+          SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+        run: |
+          test -n "$SHOPIFY_CLI_THEME_TOKEN" || (echo "Missing SHOPIFY_CLI_THEME_TOKEN" && exit 1)
+          test -n "$SHOPIFY_THEME_ID" || (echo "Missing SHOPIFY_THEME_ID" && exit 1)
+          test -n "$SHOPIFY_STORE" || (echo "Missing SHOPIFY_STORE" && exit 1)
 
       - name: Push theme files to Shopify
         env:
