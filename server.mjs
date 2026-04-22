@@ -244,17 +244,22 @@ function getInjectedChatbaseOverrides() {
       main > header + div {
         justify-content: flex-start !important;
         gap: 0 !important;
+        min-height: calc(100dvh - 60px) !important;
+        height: auto !important;
       }
 
       main > header + div > div {
         justify-content: flex-start !important;
         gap: 24px !important;
+        min-height: calc(100dvh - 60px) !important;
+        height: auto !important;
       }
 
       main > header + div > div > div {
         flex: 0 0 auto !important;
         justify-content: flex-start !important;
         padding-top: 24px !important;
+        min-height: 0 !important;
       }
 
       main > header + div > div > div > div:first-child {
@@ -270,9 +275,36 @@ function getInjectedChatbaseOverrides() {
         flex: 0 0 auto !important;
       }
 
+      @media (max-width: 749px) {
+        body.nesh-chatbase-input-active main > header + div,
+        body.nesh-chatbase-input-active main > header + div > div {
+          min-height: auto !important;
+          height: auto !important;
+        }
+
+        body.nesh-chatbase-input-active main > header + div > div {
+          gap: 12px !important;
+        }
+
+        body.nesh-chatbase-input-active main > header + div > div > div {
+          padding-top: 8px !important;
+        }
+
+        body.nesh-chatbase-input-active main > header + div > div > div > div:first-child h1 {
+          margin-top: 0 !important;
+          margin-bottom: 12px !important;
+        }
+
+        body.nesh-chatbase-input-active [data-has-messages="false"] {
+          flex: 0 0 auto !important;
+        }
+      }
+
     </style>
     <script id="nesh-chatbase-sidebar-script">
       (() => {
+        const isMobileViewport = () => window.innerWidth <= 749;
+
         const hideSidebar = () => {
           document.querySelectorAll('[data-slot="sidebar"], [data-slot="sidebar-gap"], [data-slot="sidebar-container"]').forEach((element) => {
             element.style.display = 'none';
@@ -310,6 +342,15 @@ function getInjectedChatbaseOverrides() {
           });
         };
 
+        const syncInputFocusState = (active) => {
+          if (!isMobileViewport()) {
+            document.body.classList.remove('nesh-chatbase-input-active');
+            return;
+          }
+
+          document.body.classList.toggle('nesh-chatbase-input-active', active);
+        };
+
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', () => {
             hideSidebar();
@@ -330,14 +371,29 @@ function getInjectedChatbaseOverrides() {
 
         document.addEventListener('focusin', (event) => {
           if (event.target && event.target.matches('textarea[data-slot="chatbot-input-box"]')) {
+            syncInputFocusState(true);
             setTimeout(stabilizeLandingLayout, 0);
             setTimeout(stabilizeLandingLayout, 120);
+            setTimeout(stabilizeLandingLayout, 260);
+          }
+        });
+
+        document.addEventListener('focusout', (event) => {
+          if (event.target && event.target.matches('textarea[data-slot="chatbot-input-box"]')) {
+            syncInputFocusState(false);
+            setTimeout(stabilizeLandingLayout, 0);
           }
         });
 
         window.visualViewport?.addEventListener('resize', () => {
+          syncInputFocusState(document.activeElement?.matches?.('textarea[data-slot="chatbot-input-box"]'));
           setTimeout(stabilizeLandingLayout, 0);
           setTimeout(stabilizeLandingLayout, 120);
+          setTimeout(stabilizeLandingLayout, 260);
+        });
+
+        window.addEventListener('resize', () => {
+          syncInputFocusState(document.activeElement?.matches?.('textarea[data-slot="chatbot-input-box"]'));
         });
       })();
     </script>
