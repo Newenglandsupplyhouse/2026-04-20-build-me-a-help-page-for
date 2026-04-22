@@ -62,7 +62,7 @@
 
   @media screen and (max-width: 749px) {
     #{{ section_id }} {
-      --shopify-help-header-offset: 72px;
+      --shopify-help-header-offset: 0px;
     }
   }
 
@@ -223,9 +223,9 @@
         return Math.max(maxBottom, Math.ceil(rect.bottom));
       }, 0);
 
-      const fallbackOffset = window.innerWidth <= 749 ? 72 : 164;
+      const fallbackOffset = window.innerWidth <= 749 ? 0 : 164;
       const headerOffset = window.innerWidth <= 749
-        ? (measuredOffset || fallbackOffset)
+        ? measuredOffset
         : Math.max(measuredOffset, fallbackOffset);
 
       root.style.setProperty("--shopify-help-header-offset", `${headerOffset}px`);
