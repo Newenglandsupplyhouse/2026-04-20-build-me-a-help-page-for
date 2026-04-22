@@ -163,6 +163,55 @@ function formatDocumentList(documents) {
   return `Available documents:\n${lines.join("\n")}`;
 }
 
+function isDocumentRequest(conversation) {
+  const latestUserMessage = getLatestUserMessage(conversation);
+  return /manual|manuals|document|documents|pdf|pdfs|datasheet|data sheet|spec|specs|submittal|instruction|instructions|wiring|troubleshooting/i.test(latestUserMessage);
+}
+
+async function searchDocumentsForQuery(query, vectorStoreId, apiKey, model) {
+  if (!query || !vectorStoreId) {
+    return [];
+  }
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model,
+      store: false,
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: `Find uploaded manuals, PDFs, spec sheets, and technical documents related to: ${query}`
+            }
+          ]
+        }
+      ],
+      tools: [
+        {
+          type: "file_search",
+          vector_store_ids: [vectorStoreId],
+          max_num_results: 8
+        }
+      ],
+      include: ["file_search_call.results"]
+    })
+  });
+
+  const payload = await response.json();
+  if (!response.ok) {
+    return [];
+  }
+
+  return extractFileSearchDocuments(payload);
+}
+
 function getLatestUserMessage(conversation) {
   for (let index = conversation.length - 1; index >= 0; index -= 1) {
     if (conversation[index]?.role === "user" && conversation[index]?.content) {
@@ -433,7 +482,15 @@ const server = createServer(async (request, response) => {
         summarizeTools(openAIResponse.payload.output)
       ].filter(Boolean).join(" and ");
       const replyText = extractResponseText(openAIResponse.payload);
-      const documents = extractFileSearchDocuments(openAIResponse.payload);
+      let documents = extractFileSearchDocuments(openAIResponse.payload);
+      if (!documents.length && isDocumentRequest(conversation)) {
+        documents = await searchDocumentsForQuery(
+          getLatestUserMessage(conversation),
+          process.env.OPENAI_VECTOR_STORE_ID,
+          process.env.OPENAI_API_KEY,
+          process.env.OPENAI_MODEL || "gpt-5-mini"
+        );
+      }
       const documentList = formatDocumentList(documents);
       const finalReply = documents.length
         ? `${replyText || "I found matching documents."}\n\n${documentList}`.trim()
