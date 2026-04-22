@@ -124,6 +124,43 @@
       text-underline-offset: 2px;
     }
 
+    .documents {
+      margin-top: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .document {
+      display: block;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--help-text);
+      text-decoration: none;
+    }
+
+    .document:hover,
+    .document:focus-visible {
+      border-color: rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.05);
+      outline: none;
+    }
+
+    .document-title {
+      display: block;
+      font-size: 0.96rem;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    .document-meta {
+      display: block;
+      margin-top: 4px;
+      color: var(--help-muted);
+      font-size: 0.84rem;
+    }
+
     form {
       display: flex;
       flex-direction: column;
@@ -326,7 +363,40 @@
       return fragment;
     }
 
-    function renderMessage(role, text) {
+    function renderDocuments(documents) {
+      if (!Array.isArray(documents) || !documents.length) {
+        return null;
+      }
+
+      const wrapper = document.createElement("div");
+      wrapper.className = "documents";
+
+      documents.forEach((documentItem) => {
+        const link = document.createElement("a");
+        link.className = "document";
+        link.href = documentItem.url || "#";
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+
+        const title = document.createElement("span");
+        title.className = "document-title";
+        title.textContent = documentItem.filename || "Document";
+
+        const meta = document.createElement("span");
+        meta.className = "document-meta";
+        meta.textContent = documentItem.snippet
+          ? documentItem.snippet
+          : "Open document";
+
+        link.appendChild(title);
+        link.appendChild(meta);
+        wrapper.appendChild(link);
+      });
+
+      return wrapper;
+    }
+
+    function renderMessage(role, text, documents = []) {
       const article = document.createElement("article");
       article.className = "message message-" + role;
 
@@ -335,6 +405,10 @@
       body.appendChild(buildMessageFragments(text));
 
       article.appendChild(body);
+      const documentList = renderDocuments(documents);
+      if (documentList) {
+        article.appendChild(documentList);
+      }
       messagesEl.hidden = false;
       messagesEl.appendChild(article);
       messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -378,7 +452,7 @@
         const answer = payload.reply || "I couldn't find an answer yet.";
 
         conversation.push({ role: "assistant", content: answer });
-        renderMessage("assistant", answer);
+        renderMessage("assistant", answer, payload.documents || []);
         statusEl.textContent = payload.usedTools || "";
       } catch (error) {
         renderMessage("assistant", error.message);

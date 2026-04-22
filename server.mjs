@@ -125,6 +125,32 @@ function extractResponseText(payload) {
   return parts.join("\n\n").trim();
 }
 
+function extractFileSearchDocuments(payload) {
+  const documents = [];
+
+  for (const item of payload?.output || []) {
+    if (item.type !== "file_search_call" || !Array.isArray(item.results)) {
+      continue;
+    }
+
+    for (const result of item.results) {
+      documents.push({
+        fileId: result.file_id || "",
+        filename: result.filename || "Document",
+        url: result.attributes?.source_url || "",
+        score: result.score || 0,
+        snippet: (result.text || "").slice(0, 280).trim()
+      });
+    }
+  }
+
+  return documents
+    .filter((document) => document.url || document.fileId)
+    .filter((document, index, array) => (
+      array.findIndex((other) => other.fileId === document.fileId || (other.url && other.url === document.url)) === index
+    ));
+}
+
 function getLatestUserMessage(conversation) {
   for (let index = conversation.length - 1; index >= 0; index -= 1) {
     if (conversation[index]?.role === "user" && conversation[index]?.content) {
@@ -395,10 +421,12 @@ const server = createServer(async (request, response) => {
         summarizeTools(openAIResponse.payload.output)
       ].filter(Boolean).join(" and ");
       const replyText = extractResponseText(openAIResponse.payload);
+      const documents = extractFileSearchDocuments(openAIResponse.payload);
 
       sendJson(response, 200, {
         reply: replyText || "No response text returned.",
-        usedTools: usedSources ? `Used ${usedSources.replace(/^Used /, "")}` : ""
+        usedTools: usedSources ? `Used ${usedSources.replace(/^Used /, "")}` : "",
+        documents
       }, origin);
       return;
     } catch (error) {
