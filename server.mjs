@@ -220,6 +220,10 @@ function getProxyResponseHeaders(upstreamResponse) {
 function getInjectedChatbaseOverrides() {
   return `
     <style id="nesh-chatbase-sidebar-overrides">
+      :root {
+        --nesh-mobile-vh: 100dvh;
+      }
+
       html,
       body {
         background: #08080b !important;
@@ -282,6 +286,16 @@ function getInjectedChatbaseOverrides() {
       }
 
       @media (max-width: 749px) {
+        html,
+        body,
+        [data-slot="sidebar-wrapper"],
+        [data-slot="sidebar-wrapper"] > main {
+          min-height: var(--nesh-mobile-vh) !important;
+          height: var(--nesh-mobile-vh) !important;
+          max-height: var(--nesh-mobile-vh) !important;
+          overflow: hidden !important;
+        }
+
         body,
         main[data-theme="dark"],
         main[data-theme="dark"] > header + div {
@@ -367,6 +381,14 @@ function getInjectedChatbaseOverrides() {
     <script id="nesh-chatbase-sidebar-script">
       (() => {
         const isMobileViewport = () => window.innerWidth <= 749;
+
+        const updateMobileViewportHeight = () => {
+          const viewportHeight = isMobileViewport()
+            ? (window.visualViewport?.height || window.innerHeight)
+            : window.innerHeight;
+          const nextHeight = Math.round(viewportHeight);
+          document.documentElement.style.setProperty('--nesh-mobile-vh', nextHeight + 'px');
+        };
 
         const hideSidebar = () => {
           document.querySelectorAll('[data-slot="sidebar"], [data-slot="sidebar-gap"], [data-slot="sidebar-container"]').forEach((element) => {
@@ -525,12 +547,14 @@ function getInjectedChatbaseOverrides() {
 
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', () => {
+            updateMobileViewportHeight();
             hideSidebar();
             stabilizeLandingLayout();
             forceMobileLandingLayout();
             lockViewportToTop();
           }, { once: true });
         } else {
+          updateMobileViewportHeight();
           hideSidebar();
           stabilizeLandingLayout();
           forceMobileLandingLayout();
@@ -550,11 +574,15 @@ function getInjectedChatbaseOverrides() {
         document.addEventListener('focusin', (event) => {
           if (event.target && event.target.matches('textarea[data-slot="chatbot-input-box"]')) {
             syncInputFocusState(true);
+            updateMobileViewportHeight();
             forceMobileLandingLayout();
             lockViewportToTop();
             setTimeout(stabilizeLandingLayout, 0);
             setTimeout(stabilizeLandingLayout, 120);
             setTimeout(stabilizeLandingLayout, 260);
+            setTimeout(updateMobileViewportHeight, 0);
+            setTimeout(updateMobileViewportHeight, 120);
+            setTimeout(updateMobileViewportHeight, 260);
             setTimeout(forceMobileLandingLayout, 0);
             setTimeout(forceMobileLandingLayout, 120);
             setTimeout(forceMobileLandingLayout, 260);
@@ -567,20 +595,26 @@ function getInjectedChatbaseOverrides() {
         document.addEventListener('focusout', (event) => {
           if (event.target && event.target.matches('textarea[data-slot="chatbot-input-box"]')) {
             syncInputFocusState(false);
+            updateMobileViewportHeight();
             forceMobileLandingLayout();
             setTimeout(stabilizeLandingLayout, 0);
+            setTimeout(updateMobileViewportHeight, 0);
             setTimeout(forceMobileLandingLayout, 0);
             setTimeout(lockViewportToTop, 0);
           }
         });
 
         window.visualViewport?.addEventListener('resize', () => {
+          updateMobileViewportHeight();
           syncInputFocusState(document.activeElement?.matches?.('textarea[data-slot="chatbot-input-box"]'));
           forceMobileLandingLayout();
           lockViewportToTop();
           setTimeout(stabilizeLandingLayout, 0);
           setTimeout(stabilizeLandingLayout, 120);
           setTimeout(stabilizeLandingLayout, 260);
+          setTimeout(updateMobileViewportHeight, 0);
+          setTimeout(updateMobileViewportHeight, 120);
+          setTimeout(updateMobileViewportHeight, 260);
           setTimeout(forceMobileLandingLayout, 0);
           setTimeout(forceMobileLandingLayout, 120);
           setTimeout(forceMobileLandingLayout, 260);
@@ -590,6 +624,7 @@ function getInjectedChatbaseOverrides() {
         });
 
         window.addEventListener('resize', () => {
+          updateMobileViewportHeight();
           syncInputFocusState(document.activeElement?.matches?.('textarea[data-slot="chatbot-input-box"]'));
           forceMobileLandingLayout();
           lockViewportToTop();
