@@ -288,6 +288,17 @@
     if (!isMobileViewport()) {
       const scrollDesktopPageToTop = () => {
         try {
+          if ("scrollRestoration" in history) {
+            history.scrollRestoration = "manual";
+          }
+        } catch {}
+
+        try {
+          document.documentElement.scrollTop = 0;
+          document.body.scrollTop = 0;
+        } catch {}
+
+        try {
           window.scrollTo({ top: 0, left: 0, behavior: "auto" });
         } catch {
           window.scrollTo(0, 0);
@@ -299,8 +310,10 @@
       window.visualViewport?.addEventListener("scroll", updateViewportHeight);
       window.addEventListener("load", scrollDesktopPageToTop);
       window.addEventListener("pageshow", scrollDesktopPageToTop);
+      document.addEventListener("readystatechange", scrollDesktopPageToTop);
       setTimeout(scrollDesktopPageToTop, 50);
       setTimeout(scrollDesktopPageToTop, 250);
+      setTimeout(scrollDesktopPageToTop, 750);
     }
     window.addEventListener("orientationchange", updateViewportHeight);
     window.addEventListener("resize", updateViewportHeight);
