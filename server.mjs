@@ -566,40 +566,16 @@ function getInjectedChatbaseOverrides() {
           } catch {}
         };
 
-        const centerLandingHeading = () => {
-          const heading = document.querySelector('main > header + div h1');
-          if (!heading || !/How can I help you today\?/i.test(heading.textContent || '')) {
-            return;
-          }
+        const hideLandingHeading = () => {
+          const headings = [...document.querySelectorAll('h1')].filter((heading) =>
+            /How can I help you today\?/i.test(heading.textContent || '')
+          );
 
-          const headingWrap = heading.parentElement;
-          const column = headingWrap?.parentElement;
-
-          const applyStyles = (element, styles) => {
-            if (!element) {
-              return;
-            }
-
-            Object.entries(styles).forEach(([key, value]) => {
-              try {
-                element.style.setProperty(key, value, 'important');
-              } catch {}
-            });
-          };
-
-          applyStyles(headingWrap, {
-            width: '100%',
-            display: 'flex',
-            'justify-content': 'center',
-            'align-items': 'center'
-          });
-
-          applyStyles(column, {
-            'align-items': 'stretch'
-          });
-
-          applyStyles(heading, {
-            display: 'none'
+          headings.forEach((heading) => {
+            try {
+              heading.style.setProperty('display', 'none', 'important');
+              heading.setAttribute('aria-hidden', 'true');
+            } catch {}
           });
         };
 
@@ -643,7 +619,7 @@ function getInjectedChatbaseOverrides() {
           document.addEventListener('DOMContentLoaded', () => {
             updateMobileViewportHeight();
             hideSidebar();
-            centerLandingHeading();
+            hideLandingHeading();
             reportChatState();
             stabilizeLandingLayout();
             forceMobileLandingLayout();
@@ -653,7 +629,7 @@ function getInjectedChatbaseOverrides() {
         } else {
           updateMobileViewportHeight();
           hideSidebar();
-          centerLandingHeading();
+          hideLandingHeading();
           reportChatState();
           stabilizeLandingLayout();
           forceMobileLandingLayout();
@@ -663,7 +639,7 @@ function getInjectedChatbaseOverrides() {
 
         new MutationObserver(() => {
           hideSidebar();
-          centerLandingHeading();
+          hideLandingHeading();
           reportChatState();
           stabilizeLandingLayout();
           forceMobileLandingLayout();
