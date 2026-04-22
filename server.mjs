@@ -273,14 +273,11 @@ function getInjectedChatbaseOverrides() {
       }
 
       main > header + div > div > div > div:first-child {
-        display: none !important;
+        flex: 0 0 auto !important;
+        justify-content: flex-start !important;
       }
 
       main > header + div > div > div > div:first-child > div:first-child {
-        display: none !important;
-      }
-
-      main > header + div > div > div > div:first-child h1 {
         display: none !important;
       }
 
@@ -563,26 +560,6 @@ function getInjectedChatbaseOverrides() {
           } catch {}
         };
 
-        const hideLandingHeading = () => {
-          const headings = [...document.querySelectorAll('h1')].filter((heading) =>
-            /How can I help you today\?/i.test(heading.textContent || '')
-          );
-
-          headings.forEach((heading) => {
-            try {
-              heading.style.setProperty('display', 'none', 'important');
-              heading.setAttribute('aria-hidden', 'true');
-            } catch {}
-          });
-        };
-
-        const reportChatState = () => {
-          const empty = Boolean(document.querySelector('[data-has-messages="false"]'));
-          try {
-            window.parent?.postMessage({ type: 'nesh-chatbase-state', empty }, '*');
-          } catch {}
-        };
-
         const syncInputFocusState = (active) => {
           if (!isMobileViewport()) {
             document.body.classList.remove('nesh-chatbase-input-active');
@@ -616,8 +593,6 @@ function getInjectedChatbaseOverrides() {
           document.addEventListener('DOMContentLoaded', () => {
             updateMobileViewportHeight();
             hideSidebar();
-            hideLandingHeading();
-            reportChatState();
             stabilizeLandingLayout();
             forceMobileLandingLayout();
             lockViewportToTop();
@@ -626,8 +601,6 @@ function getInjectedChatbaseOverrides() {
         } else {
           updateMobileViewportHeight();
           hideSidebar();
-          hideLandingHeading();
-          reportChatState();
           stabilizeLandingLayout();
           forceMobileLandingLayout();
           lockViewportToTop();
@@ -636,8 +609,6 @@ function getInjectedChatbaseOverrides() {
 
         new MutationObserver(() => {
           hideSidebar();
-          hideLandingHeading();
-          reportChatState();
           stabilizeLandingLayout();
           forceMobileLandingLayout();
           lockViewportToTop();
