@@ -587,13 +587,10 @@ function getInjectedChatbaseOverrides() {
             return;
           }
 
-          const isPortraitMobile = isMobileViewport() && window.innerHeight >= window.innerWidth;
-          const stageRect = stage.getBoundingClientRect();
           const inputRect = inputShell.getBoundingClientRect();
           const wrap = heading.parentElement;
           const outerWrap = wrap?.parentElement;
           const clampedWidth = Math.max(220, Math.round(inputRect.width));
-          const centeredLeft = Math.max(0, Math.round((inputRect.left + (inputRect.width / 2)) - stageRect.left - (clampedWidth / 2)));
 
           if (!wrap) {
             return;
@@ -610,8 +607,8 @@ function getInjectedChatbaseOverrides() {
             wrap.style.setProperty('display', 'block', 'important');
             wrap.style.setProperty('width', clampedWidth + 'px', 'important');
             wrap.style.setProperty('max-width', clampedWidth + 'px', 'important');
-            wrap.style.setProperty('margin-left', isPortraitMobile ? centeredLeft + 'px' : 'auto', 'important');
-            wrap.style.setProperty('margin-right', isPortraitMobile ? '0' : 'auto', 'important');
+            wrap.style.setProperty('margin-left', 'auto', 'important');
+            wrap.style.setProperty('margin-right', 'auto', 'important');
             wrap.style.setProperty('text-align', 'center', 'important');
 
             heading.style.setProperty('display', 'block', 'important');
