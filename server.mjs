@@ -54,6 +54,100 @@ function sendHtml(response, statusCode, html, origin = "*") {
   response.end(html);
 }
 
+function buildChatbaseResetPage(nextUrl) {
+  const safeNextUrl = String(nextUrl || "/chatbase-help");
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resetting chat</title>
+  <style>
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: #08080b;
+      color: #f5f5f7;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+    }
+
+    .reset-status {
+      font-size: 14px;
+      color: #c7c9d1;
+      letter-spacing: 0.01em;
+    }
+  </style>
+</head>
+<body>
+  <div class="reset-status">Resetting chat…</div>
+  <script>
+    (() => {
+      const nextUrl = ${JSON.stringify(safeNextUrl)};
+
+      const clearCookies = () => {
+        document.cookie.split(";").forEach((cookie) => {
+          const eqIndex = cookie.indexOf("=");
+          const name = (eqIndex > -1 ? cookie.slice(0, eqIndex) : cookie).trim();
+          if (!name) {
+            return;
+          }
+
+          document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+          document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=" + location.hostname;
+        });
+      };
+
+      const clearIndexedDb = async () => {
+        if (!("indexedDB" in window) || typeof indexedDB.databases !== "function") {
+          return;
+        }
+
+        const databases = await indexedDB.databases();
+        await Promise.all(databases.map((database) => {
+          if (!database.name) {
+            return Promise.resolve();
+          }
+
+          return new Promise((resolve) => {
+            const request = indexedDB.deleteDatabase(database.name);
+            request.onsuccess = request.onerror = request.onblocked = () => resolve();
+          });
+        }));
+      };
+
+      const clearCaches = async () => {
+        if (!("caches" in window)) {
+          return;
+        }
+
+        const cacheKeys = await caches.keys();
+        await Promise.all(cacheKeys.map((key) => caches.delete(key)));
+      };
+
+      const clearStorage = async () => {
+        try { localStorage.clear(); } catch {}
+        try { sessionStorage.clear(); } catch {}
+        try { clearCookies(); } catch {}
+        try { await clearIndexedDb(); } catch {}
+        try { await clearCaches(); } catch {}
+      };
+
+      clearStorage().finally(() => {
+        setTimeout(() => {
+          location.replace(nextUrl);
+        }, 40);
+      });
+    })();
+  </script>
+</body>
+</html>`;
+}
+
 function getChatbaseHelpBaseUrl() {
   try {
     return new URL(process.env.CHATBASE_HELP_URL || DEFAULT_CHATBASE_HELP_URL);
@@ -629,6 +723,12 @@ const server = createServer(async (request, response) => {
   if (request.method === "GET" && requestUrl.pathname === "/") {
     const html = await readFile(path.join(__dirname, "help-page.html"), "utf8");
     sendHtml(response, 200, html, origin);
+    return;
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/chatbase-help/reset") {
+    const nextUrl = requestUrl.searchParams.get("next") || "/chatbase-help";
+    sendHtml(response, 200, buildChatbaseResetPage(nextUrl), origin);
     return;
   }
 
