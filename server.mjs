@@ -251,6 +251,10 @@ function getInjectedChatbaseOverrides() {
         display: none !important;
       }
 
+      footer {
+        display: none !important;
+      }
+
       main > header + div {
         justify-content: flex-start !important;
         gap: 0 !important;
