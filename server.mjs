@@ -302,6 +302,12 @@ function getInjectedChatbaseOverrides() {
             overflow-x: hidden !important;
             overflow-y: auto !important;
             -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior-y: contain !important;
+            touch-action: pan-y !important;
+          }
+
+          main[data-theme="dark"] > header + div {
+            touch-action: pan-y !important;
           }
 
         body,
