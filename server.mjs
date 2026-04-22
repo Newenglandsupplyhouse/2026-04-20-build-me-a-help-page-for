@@ -284,14 +284,7 @@ function getInjectedChatbaseOverrides() {
       }
 
       main > header + div > div > div > div:first-child h1 {
-        display: flex !important;
-        width: 100% !important;
-        max-width: none !important;
-        justify-content: center !important;
-        align-items: center !important;
-        margin-left: auto !important;
-        margin-right: auto !important;
-        text-align: center !important;
+        display: none !important;
       }
 
       [data-has-messages="false"] {
@@ -606,14 +599,15 @@ function getInjectedChatbaseOverrides() {
           });
 
           applyStyles(heading, {
-            display: 'flex',
-            width: '100%',
-            'max-width': 'none',
-            'justify-content': 'center',
-            'align-items': 'center',
-            'text-align': 'center',
-            margin: '0 auto 12px'
+            display: 'none'
           });
+        };
+
+        const reportChatState = () => {
+          const empty = Boolean(document.querySelector('[data-has-messages="false"]'));
+          try {
+            window.parent?.postMessage({ type: 'nesh-chatbase-state', empty }, '*');
+          } catch {}
         };
 
         const syncInputFocusState = (active) => {
@@ -650,6 +644,7 @@ function getInjectedChatbaseOverrides() {
             updateMobileViewportHeight();
             hideSidebar();
             centerLandingHeading();
+            reportChatState();
             stabilizeLandingLayout();
             forceMobileLandingLayout();
             lockViewportToTop();
@@ -659,6 +654,7 @@ function getInjectedChatbaseOverrides() {
           updateMobileViewportHeight();
           hideSidebar();
           centerLandingHeading();
+          reportChatState();
           stabilizeLandingLayout();
           forceMobileLandingLayout();
           lockViewportToTop();
@@ -668,6 +664,7 @@ function getInjectedChatbaseOverrides() {
         new MutationObserver(() => {
           hideSidebar();
           centerLandingHeading();
+          reportChatState();
           stabilizeLandingLayout();
           forceMobileLandingLayout();
           lockViewportToTop();
