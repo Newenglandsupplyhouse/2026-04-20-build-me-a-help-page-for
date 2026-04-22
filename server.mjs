@@ -151,6 +151,18 @@ function extractFileSearchDocuments(payload) {
     ));
 }
 
+function formatDocumentList(documents) {
+  if (!documents.length) {
+    return "";
+  }
+
+  const lines = documents.slice(0, 5).map((document, index) => (
+    `${index + 1}. ${document.filename}${document.url ? ` - ${document.url}` : ""}`
+  ));
+
+  return `Available documents:\n${lines.join("\n")}`;
+}
+
 function getLatestUserMessage(conversation) {
   for (let index = conversation.length - 1; index >= 0; index -= 1) {
     if (conversation[index]?.role === "user" && conversation[index]?.content) {
@@ -422,9 +434,13 @@ const server = createServer(async (request, response) => {
       ].filter(Boolean).join(" and ");
       const replyText = extractResponseText(openAIResponse.payload);
       const documents = extractFileSearchDocuments(openAIResponse.payload);
+      const documentList = formatDocumentList(documents);
+      const finalReply = documents.length
+        ? `${replyText || "I found matching documents."}\n\n${documentList}`.trim()
+        : (replyText || "No response text returned.");
 
       sendJson(response, 200, {
-        reply: replyText || "No response text returned.",
+        reply: finalReply,
         usedTools: usedSources ? `Used ${usedSources.replace(/^Used /, "")}` : "",
         documents
       }, origin);
