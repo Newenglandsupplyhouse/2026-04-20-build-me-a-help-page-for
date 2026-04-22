@@ -328,7 +328,9 @@
         loadFreshFrame();
       });
 
-      loadFreshFrame();
+      if (isMobileViewport()) {
+        loadFreshFrame();
+      }
     }
 
     updateViewportHeight();
