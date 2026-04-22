@@ -309,7 +309,24 @@
         window.setTimeout(scrollDesktopPageToTop, 400);
       };
 
+      frame.addEventListener("load", () => {
+        scrollDesktopPageToTop();
+        window.setTimeout(scrollDesktopPageToTop, 50);
+        window.setTimeout(scrollDesktopPageToTop, 250);
+      });
+
+      resetButton.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+      });
+
+      resetButton.addEventListener("touchstart", (event) => {
+        event.preventDefault();
+      }, { passive: false });
+
       resetButton.addEventListener("click", () => {
+        try {
+          resetButton.blur();
+        } catch {}
         loadFreshFrame();
       });
 
