@@ -220,6 +220,11 @@ function getProxyResponseHeaders(upstreamResponse) {
 function getInjectedChatbaseOverrides() {
   return `
     <style id="nesh-chatbase-sidebar-overrides">
+      html,
+      body {
+        background: #08080b !important;
+      }
+
       [data-slot="sidebar-wrapper"] {
         --sidebar-width: 0px !important;
         --sidebar-width-icon: 0px !important;
@@ -235,6 +240,7 @@ function getInjectedChatbaseOverrides() {
 
       [data-slot="sidebar-wrapper"] > main {
         border-left: 0 !important;
+        background: #08080b !important;
       }
 
       header.sticky button[data-slot="button"] {
@@ -397,6 +403,10 @@ function getInjectedChatbaseOverrides() {
               element.scrollTop = 0;
             } catch {}
           });
+
+          try {
+            window.scrollTo(0, 0);
+          } catch {}
         };
 
         const forceMobileLandingLayout = () => {
@@ -466,6 +476,14 @@ function getInjectedChatbaseOverrides() {
             paddingTop: '0'
           });
 
+          applyStyles(document.documentElement, {
+            background: '#08080b'
+          });
+
+          applyStyles(document.body, {
+            background: '#08080b'
+          });
+
           if (heroSpacer) {
             heroSpacer.style.display = 'none';
           }
@@ -485,22 +503,45 @@ function getInjectedChatbaseOverrides() {
           document.body.classList.toggle('nesh-chatbase-input-active', active);
         };
 
+        const lockViewportToTop = () => {
+          const scrollers = [
+            document.scrollingElement,
+            document.documentElement,
+            document.body,
+            document.querySelector('main'),
+            document.querySelector('[data-slot="sidebar-wrapper"] > main')
+          ].filter(Boolean);
+
+          scrollers.forEach((element) => {
+            try {
+              element.scrollTop = 0;
+            } catch {}
+          });
+
+          try {
+            window.scrollTo(0, 0);
+          } catch {}
+        };
+
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', () => {
             hideSidebar();
             stabilizeLandingLayout();
             forceMobileLandingLayout();
+            lockViewportToTop();
           }, { once: true });
         } else {
           hideSidebar();
           stabilizeLandingLayout();
           forceMobileLandingLayout();
+          lockViewportToTop();
         }
 
         new MutationObserver(() => {
           hideSidebar();
           stabilizeLandingLayout();
           forceMobileLandingLayout();
+          lockViewportToTop();
         }).observe(document.documentElement, {
           childList: true,
           subtree: true
@@ -510,12 +551,16 @@ function getInjectedChatbaseOverrides() {
           if (event.target && event.target.matches('textarea[data-slot="chatbot-input-box"]')) {
             syncInputFocusState(true);
             forceMobileLandingLayout();
+            lockViewportToTop();
             setTimeout(stabilizeLandingLayout, 0);
             setTimeout(stabilizeLandingLayout, 120);
             setTimeout(stabilizeLandingLayout, 260);
             setTimeout(forceMobileLandingLayout, 0);
             setTimeout(forceMobileLandingLayout, 120);
             setTimeout(forceMobileLandingLayout, 260);
+            setTimeout(lockViewportToTop, 0);
+            setTimeout(lockViewportToTop, 120);
+            setTimeout(lockViewportToTop, 260);
           }
         });
 
@@ -525,23 +570,29 @@ function getInjectedChatbaseOverrides() {
             forceMobileLandingLayout();
             setTimeout(stabilizeLandingLayout, 0);
             setTimeout(forceMobileLandingLayout, 0);
+            setTimeout(lockViewportToTop, 0);
           }
         });
 
         window.visualViewport?.addEventListener('resize', () => {
           syncInputFocusState(document.activeElement?.matches?.('textarea[data-slot="chatbot-input-box"]'));
           forceMobileLandingLayout();
+          lockViewportToTop();
           setTimeout(stabilizeLandingLayout, 0);
           setTimeout(stabilizeLandingLayout, 120);
           setTimeout(stabilizeLandingLayout, 260);
           setTimeout(forceMobileLandingLayout, 0);
           setTimeout(forceMobileLandingLayout, 120);
           setTimeout(forceMobileLandingLayout, 260);
+          setTimeout(lockViewportToTop, 0);
+          setTimeout(lockViewportToTop, 120);
+          setTimeout(lockViewportToTop, 260);
         });
 
         window.addEventListener('resize', () => {
           syncInputFocusState(document.activeElement?.matches?.('textarea[data-slot="chatbot-input-box"]'));
           forceMobileLandingLayout();
+          lockViewportToTop();
         });
       })();
     </script>
