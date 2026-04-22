@@ -342,6 +342,83 @@ function getInjectedChatbaseOverrides() {
           });
         };
 
+        const forceMobileLandingLayout = () => {
+          if (!isMobileViewport()) {
+            return;
+          }
+
+          const emptyState = document.querySelector('[data-has-messages="false"]');
+          if (!emptyState) {
+            return;
+          }
+
+          const column = emptyState.parentElement;
+          const heroBlock = emptyState.previousElementSibling;
+          const centeredStack = column?.parentElement;
+          const stage = centeredStack?.parentElement;
+          const heroHeading = heroBlock?.querySelector('h1');
+          const heroSpacer = heroBlock?.firstElementChild;
+          const messageRail = emptyState.querySelector(':scope > div:first-child');
+
+          const applyStyles = (element, styles) => {
+            if (!element) {
+              return;
+            }
+
+            Object.entries(styles).forEach(([key, value]) => {
+              try {
+                element.style[key] = value;
+              } catch {}
+            });
+          };
+
+          applyStyles(stage, {
+            height: 'auto',
+            minHeight: '0',
+            justifyContent: 'flex-start',
+            gap: '0'
+          });
+
+          applyStyles(centeredStack, {
+            flex: '0 0 auto',
+            minHeight: '0',
+            justifyContent: 'flex-start',
+            gap: '12px'
+          });
+
+          applyStyles(column, {
+            flex: '0 0 auto',
+            minHeight: '0',
+            justifyContent: 'flex-start'
+          });
+
+          applyStyles(heroBlock, {
+            flex: '0 0 auto',
+            minHeight: '0',
+            justifyContent: 'flex-start',
+            paddingTop: '8px'
+          });
+
+          applyStyles(emptyState, {
+            flex: '0 0 auto',
+            minHeight: '0'
+          });
+
+          applyStyles(messageRail, {
+            minHeight: '0',
+            paddingTop: '0'
+          });
+
+          if (heroSpacer) {
+            heroSpacer.style.display = 'none';
+          }
+
+          if (heroHeading) {
+            heroHeading.style.marginTop = '0';
+            heroHeading.style.marginBottom = '12px';
+          }
+        };
+
         const syncInputFocusState = (active) => {
           if (!isMobileViewport()) {
             document.body.classList.remove('nesh-chatbase-input-active');
@@ -355,15 +432,18 @@ function getInjectedChatbaseOverrides() {
           document.addEventListener('DOMContentLoaded', () => {
             hideSidebar();
             stabilizeLandingLayout();
+            forceMobileLandingLayout();
           }, { once: true });
         } else {
           hideSidebar();
           stabilizeLandingLayout();
+          forceMobileLandingLayout();
         }
 
         new MutationObserver(() => {
           hideSidebar();
           stabilizeLandingLayout();
+          forceMobileLandingLayout();
         }).observe(document.documentElement, {
           childList: true,
           subtree: true
@@ -372,28 +452,39 @@ function getInjectedChatbaseOverrides() {
         document.addEventListener('focusin', (event) => {
           if (event.target && event.target.matches('textarea[data-slot="chatbot-input-box"]')) {
             syncInputFocusState(true);
+            forceMobileLandingLayout();
             setTimeout(stabilizeLandingLayout, 0);
             setTimeout(stabilizeLandingLayout, 120);
             setTimeout(stabilizeLandingLayout, 260);
+            setTimeout(forceMobileLandingLayout, 0);
+            setTimeout(forceMobileLandingLayout, 120);
+            setTimeout(forceMobileLandingLayout, 260);
           }
         });
 
         document.addEventListener('focusout', (event) => {
           if (event.target && event.target.matches('textarea[data-slot="chatbot-input-box"]')) {
             syncInputFocusState(false);
+            forceMobileLandingLayout();
             setTimeout(stabilizeLandingLayout, 0);
+            setTimeout(forceMobileLandingLayout, 0);
           }
         });
 
         window.visualViewport?.addEventListener('resize', () => {
           syncInputFocusState(document.activeElement?.matches?.('textarea[data-slot="chatbot-input-box"]'));
+          forceMobileLandingLayout();
           setTimeout(stabilizeLandingLayout, 0);
           setTimeout(stabilizeLandingLayout, 120);
           setTimeout(stabilizeLandingLayout, 260);
+          setTimeout(forceMobileLandingLayout, 0);
+          setTimeout(forceMobileLandingLayout, 120);
+          setTimeout(forceMobileLandingLayout, 260);
         });
 
         window.addEventListener('resize', () => {
           syncInputFocusState(document.activeElement?.matches?.('textarea[data-slot="chatbot-input-box"]'));
+          forceMobileLandingLayout();
         });
       })();
     </script>
