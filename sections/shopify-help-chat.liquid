@@ -49,10 +49,12 @@
 
   #{{ section_id }} {
     --shopify-help-header-offset: 164px;
+    --shopify-help-viewport-height: 100dvh;
+    --shopify-help-safe-bottom: env(safe-area-inset-bottom, 0px);
     box-sizing: border-box;
     padding-top: var(--shopify-help-header-offset);
-    height: 100dvh;
-    min-height: 100dvh;
+    height: var(--shopify-help-viewport-height);
+    min-height: var(--shopify-help-viewport-height);
     position: relative;
     background: #08080b;
     overflow: hidden;
@@ -67,15 +69,15 @@
   #{{ section_id }} .shopify-chatbase-help__frame {
     display: block;
     width: 100%;
-    height: calc(100dvh - var(--shopify-help-header-offset));
-    min-height: calc(100dvh - var(--shopify-help-header-offset));
+    height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
+    min-height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
     border: 0;
     background: #08080b;
   }
 
   #{{ section_id }} .shopify-chatbase-help__empty {
-    height: calc(100dvh - var(--shopify-help-header-offset));
-    min-height: calc(100dvh - var(--shopify-help-header-offset));
+    height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
+    min-height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
     display: grid;
     place-items: center;
     padding: 24px;
@@ -102,7 +104,7 @@
   #{{ section_id }} .shopify-chatbase-help__reset {
     position: absolute;
     right: max(18px, calc(50% - 340px));
-    bottom: 176px;
+    bottom: max(calc(176px + var(--shopify-help-safe-bottom)), 24px);
     z-index: 3;
     display: inline-flex;
     align-items: center;
@@ -144,8 +146,9 @@
 
   @media screen and (max-width: 749px) {
     #{{ section_id }} .shopify-chatbase-help__reset {
-      right: 14px;
-      bottom: 152px;
+      right: max(12px, env(safe-area-inset-right, 0px));
+      bottom: auto;
+      top: calc(var(--shopify-help-header-offset) + 12px);
       min-height: 36px;
       padding: 0 12px;
       font-size: 12px;
@@ -177,6 +180,11 @@
 
     const frame = root.querySelector(".shopify-chatbase-help__frame");
     const resetButton = root.querySelector(".shopify-chatbase-help__reset");
+
+    const updateViewportHeight = () => {
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      root.style.setProperty("--shopify-help-viewport-height", `${Math.round(viewportHeight)}px`);
+    };
 
     const updateHeaderOffset = () => {
       const selectors = [
@@ -236,11 +244,18 @@
       });
     }
 
+    updateViewportHeight();
     updateHeaderOffset();
+    window.visualViewport?.addEventListener("resize", updateViewportHeight);
+    window.visualViewport?.addEventListener("scroll", updateViewportHeight);
+    window.addEventListener("orientationchange", updateViewportHeight);
+    window.addEventListener("resize", updateViewportHeight);
     window.addEventListener("resize", updateHeaderOffset);
     window.addEventListener("load", updateHeaderOffset);
+    window.addEventListener("load", updateViewportHeight);
     setTimeout(updateHeaderOffset, 250);
     setTimeout(updateHeaderOffset, 1000);
+    setTimeout(updateViewportHeight, 250);
   })();
 </script>
 

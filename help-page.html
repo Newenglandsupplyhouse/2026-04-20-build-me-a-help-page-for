@@ -16,13 +16,14 @@
 
     body {
       font-family: Arial, sans-serif;
+      --help-page-viewport-height: 100dvh;
     }
 
     iframe {
       display: block;
       width: 100%;
-      height: 100dvh;
-      min-height: 100dvh;
+      height: var(--help-page-viewport-height);
+      min-height: var(--help-page-viewport-height);
       border: 0;
       background: #08080b;
     }
@@ -35,5 +36,19 @@
     loading="lazy"
     allow="clipboard-write; microphone"
   ></iframe>
+  <script>
+    (() => {
+      const updateViewportHeight = () => {
+        const viewportHeight = window.visualViewport?.height || window.innerHeight;
+        document.body.style.setProperty("--help-page-viewport-height", `${Math.round(viewportHeight)}px`);
+      };
+
+      updateViewportHeight();
+      window.visualViewport?.addEventListener("resize", updateViewportHeight);
+      window.visualViewport?.addEventListener("scroll", updateViewportHeight);
+      window.addEventListener("resize", updateViewportHeight);
+      window.addEventListener("orientationchange", updateViewportHeight);
+    })();
+  </script>
 </body>
 </html>
