@@ -241,6 +241,35 @@ function getInjectedChatbaseOverrides() {
         display: none !important;
       }
 
+      main > header + div {
+        justify-content: flex-start !important;
+        gap: 0 !important;
+      }
+
+      main > header + div > div {
+        justify-content: flex-start !important;
+        gap: 24px !important;
+      }
+
+      main > header + div > div > div {
+        flex: 0 0 auto !important;
+        justify-content: flex-start !important;
+        padding-top: 24px !important;
+      }
+
+      main > header + div > div > div > div:first-child {
+        flex: 0 0 auto !important;
+        justify-content: flex-start !important;
+      }
+
+      main > header + div > div > div > div:first-child > div:first-child {
+        display: none !important;
+      }
+
+      [data-has-messages="false"] {
+        flex: 0 0 auto !important;
+      }
+
     </style>
     <script id="nesh-chatbase-sidebar-script">
       (() => {
@@ -261,19 +290,54 @@ function getInjectedChatbaseOverrides() {
           });
         };
 
+        const stabilizeLandingLayout = () => {
+          const emptyState = document.querySelector('[data-has-messages="false"]');
+          if (!emptyState) {
+            return;
+          }
+
+          const scrollers = [
+            document.scrollingElement,
+            document.documentElement,
+            document.body,
+            document.querySelector('main')
+          ].filter(Boolean);
+
+          scrollers.forEach((element) => {
+            try {
+              element.scrollTop = 0;
+            } catch {}
+          });
+        };
+
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', () => {
             hideSidebar();
+            stabilizeLandingLayout();
           }, { once: true });
         } else {
           hideSidebar();
+          stabilizeLandingLayout();
         }
 
         new MutationObserver(() => {
           hideSidebar();
+          stabilizeLandingLayout();
         }).observe(document.documentElement, {
           childList: true,
           subtree: true
+        });
+
+        document.addEventListener('focusin', (event) => {
+          if (event.target && event.target.matches('textarea[data-slot="chatbot-input-box"]')) {
+            setTimeout(stabilizeLandingLayout, 0);
+            setTimeout(stabilizeLandingLayout, 120);
+          }
+        });
+
+        window.visualViewport?.addEventListener('resize', () => {
+          setTimeout(stabilizeLandingLayout, 0);
+          setTimeout(stabilizeLandingLayout, 120);
         });
       })();
     </script>
