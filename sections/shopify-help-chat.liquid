@@ -35,24 +35,12 @@
 
   #{{ section_id }} {
     --shopify-help-header-offset: 164px;
-    position: relative;
-    margin-top: var(--shopify-help-header-offset);
-    height: calc(100dvh - var(--shopify-help-header-offset));
-    min-height: calc(100dvh - var(--shopify-help-header-offset));
+    box-sizing: border-box;
+    padding-top: var(--shopify-help-header-offset);
+    height: 100dvh;
+    min-height: 100dvh;
     background: #08080b;
-    padding: 0;
     overflow: hidden;
-  }
-
-  #{{ section_id }}::before {
-    content: "";
-    position: absolute;
-    top: calc(var(--shopify-help-header-offset) * -1);
-    left: 0;
-    width: 100%;
-    height: var(--shopify-help-header-offset);
-    background: #08080b;
-    pointer-events: none;
   }
 
   @media screen and (max-width: 749px) {
