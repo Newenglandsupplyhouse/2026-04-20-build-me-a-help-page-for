@@ -525,6 +525,9 @@ function getInjectedChatbaseOverrides() {
           if (!isMobileViewport()) {
             stage.style.transform = '';
             stage.style.transformOrigin = '';
+            try {
+              window.parent?.postMessage({ type: 'nesh-chatbase-mobile-offset', shift: 0, active: false }, '*');
+            } catch {}
             return;
           }
 
@@ -535,6 +538,9 @@ function getInjectedChatbaseOverrides() {
           if (!emptyState || !heading) {
             stage.style.transform = '';
             stage.style.transformOrigin = '';
+            try {
+              window.parent?.postMessage({ type: 'nesh-chatbase-mobile-offset', shift: 0, active: false }, '*');
+            } catch {}
             return;
           }
 
@@ -545,6 +551,13 @@ function getInjectedChatbaseOverrides() {
 
           stage.style.transformOrigin = 'top center';
           stage.style.transform = shift > 0 ? `translateY(-${shift}px)` : '';
+          try {
+            window.parent?.postMessage({
+              type: 'nesh-chatbase-mobile-offset',
+              shift,
+              active: document.activeElement?.matches?.('textarea[data-slot="chatbot-input-box"]') || false
+            }, '*');
+          } catch {}
         };
 
         const syncInputFocusState = (active) => {
