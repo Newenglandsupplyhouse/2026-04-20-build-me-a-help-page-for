@@ -604,6 +604,8 @@ function getInjectedChatbaseOverrides() {
           const wrap = heading.parentElement;
           const outerWrap = wrap?.parentElement;
           const clampedWidth = Math.max(220, Math.round(inputRect.width));
+          const isPortraitMobile = isMobileViewport() && window.innerHeight >= window.innerWidth;
+          const portraitNudge = isPortraitMobile ? 14 : 0;
 
           if (!wrap) {
             return;
@@ -623,6 +625,7 @@ function getInjectedChatbaseOverrides() {
             wrap.style.setProperty('margin-left', 'auto', 'important');
             wrap.style.setProperty('margin-right', 'auto', 'important');
             wrap.style.setProperty('text-align', 'center', 'important');
+            wrap.style.setProperty('transform', portraitNudge ? ('translateX(' + portraitNudge + 'px)') : 'none', 'important');
 
             heading.style.setProperty('display', 'block', 'important');
             heading.style.setProperty('width', '100%', 'important');
