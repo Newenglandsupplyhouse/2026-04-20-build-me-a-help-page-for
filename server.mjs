@@ -761,16 +761,23 @@ function getInjectedChatbaseOverrides() {
 }
 
 function injectChatbaseOverrides(html) {
+  const rewrittenHtml = html
+    .replace(
+      /<a href="https:\/\/chatbase\.co" target="_blank" class="flex items-center justify-center gap-1\.5" rel="noopener"><svg[\s\S]*?<\/svg><span class="select-none font-medium text-xs text-zinc-500\/90">Powered by Chatbase<\/span><\/a>/,
+      '<a href="https://newenglandsupplyhouse.com" target="_blank" class="flex items-center justify-center gap-1.5" rel="noopener"><span class="select-none font-medium text-xs text-zinc-500/90">Built by New England Supply House</span></a>'
+    )
+    .replace(/Powered by Chatbase/g, "Built by New England Supply House");
+
   const injection = getInjectedChatbaseOverrides();
-  if (html.includes("nesh-chatbase-sidebar-overrides")) {
-    return html;
+  if (rewrittenHtml.includes("nesh-chatbase-sidebar-overrides")) {
+    return rewrittenHtml;
   }
 
-  if (html.includes("</head>")) {
-    return html.replace("</head>", `${injection}</head>`);
+  if (rewrittenHtml.includes("</head>")) {
+    return rewrittenHtml.replace("</head>", `${injection}</head>`);
   }
 
-  return `${injection}${html}`;
+  return `${injection}${rewrittenHtml}`;
 }
 
 async function proxyChatbaseRequest(request, response, targetUrl, options = {}) {
