@@ -550,7 +550,7 @@ function getInjectedChatbaseOverrides() {
           const shift = Math.max(0, Math.round(headingRect.top - desiredTop));
 
           stage.style.transformOrigin = 'top center';
-          stage.style.transform = shift > 0 ? `translateY(-${shift}px)` : '';
+          stage.style.transform = shift > 0 ? 'translateY(-' + shift + 'px)' : '';
           try {
             window.parent?.postMessage({
               type: 'nesh-chatbase-mobile-offset',
@@ -583,8 +583,8 @@ function getInjectedChatbaseOverrides() {
 
           try {
             wrap.style.setProperty('display', 'block', 'important');
-            wrap.style.setProperty('width', `${clampedWidth}px`, 'important');
-            wrap.style.setProperty('max-width', `${clampedWidth}px`, 'important');
+            wrap.style.setProperty('width', clampedWidth + 'px', 'important');
+            wrap.style.setProperty('max-width', clampedWidth + 'px', 'important');
             wrap.style.setProperty('margin-left', 'auto', 'important');
             wrap.style.setProperty('margin-right', 'auto', 'important');
             wrap.style.setProperty('text-align', 'center', 'important');
