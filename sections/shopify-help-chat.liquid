@@ -368,10 +368,6 @@
         event.preventDefault();
       });
 
-      resetButton.addEventListener("touchstart", (event) => {
-        event.preventDefault();
-      }, { passive: false });
-
       resetButton.addEventListener("click", () => {
         try {
           resetButton.blur();
@@ -379,7 +375,9 @@
         loadFreshFrame();
       });
 
-      loadFreshFrame();
+      if (!isMobileViewport()) {
+        loadFreshFrame();
+      }
     }
 
     updateViewportHeight();
