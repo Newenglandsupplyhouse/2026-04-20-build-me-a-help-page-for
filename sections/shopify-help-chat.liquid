@@ -41,32 +41,6 @@
 </section>
 
 <style>
-  body.shopify-chatbase-help-page {
-    --shopify-help-desktop-header-peek: 18px;
-  }
-
-  @media screen and (min-width: 750px) {
-    body.shopify-chatbase-help-page .shopify-section-group-header-group {
-      position: fixed;
-      left: 0;
-      right: 0;
-      top: 0;
-      z-index: 20;
-      transform: translateY(calc(-1 * var(--shopify-help-global-header-offset, 164px) + var(--shopify-help-desktop-header-peek)));
-      transition: transform 0.24s ease;
-      will-change: transform;
-    }
-
-    body.shopify-chatbase-help-page .shopify-section-group-header-group:hover,
-    body.shopify-chatbase-help-page .shopify-section-group-header-group:focus-within {
-      transform: translateY(0);
-    }
-
-    body.shopify-chatbase-help-page #MainContent {
-      top: var(--shopify-help-desktop-header-peek) !important;
-    }
-  }
-
   body.shopify-chatbase-help-page #MainContent {
     position: fixed !important;
     left: 0;
