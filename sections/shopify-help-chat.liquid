@@ -154,6 +154,21 @@
   }
 
   @media screen and (max-width: 749px) {
+    body.shopify-chatbase-help-page .announcement-bar-section,
+    body.shopify-chatbase-help-page .utility-bar,
+    body.shopify-chatbase-help-page [class*="gsc-countdown"],
+    body.shopify-chatbase-help-page [class*="gsc-countdown-widget"],
+    body.shopify-chatbase-help-page [id*="gsc-countdown"],
+    body.shopify-chatbase-help-page [class*="ai-countdown-timer-"],
+    body.shopify-chatbase-help-page [class*="CountdownTimer"],
+    body.shopify-chatbase-help-page countdown-timer-abhzcb2vcdgw1vgvzvaigenblock042d294t6ggty {
+      display: none !important;
+      pointer-events: none !important;
+      visibility: hidden !important;
+      max-height: 0 !important;
+      overflow: hidden !important;
+    }
+
     #{{ section_id }} .shopify-chatbase-help__reset {
       left: 50%;
       right: auto;
