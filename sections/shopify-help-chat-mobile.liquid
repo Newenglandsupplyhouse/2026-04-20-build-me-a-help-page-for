@@ -118,8 +118,11 @@
 
   #{{ section_id }} .shopify-chatbase-help-mobile__reset {
     position: absolute;
-    top: calc(var(--shopify-help-mobile-safe-top) + 10px);
-    right: max(12px, var(--shopify-help-mobile-safe-right));
+    left: 50%;
+    right: auto;
+    top: auto;
+    bottom: max(calc(env(safe-area-inset-bottom, 0px) + 86px), 16px);
+    transform: translateX(-50%);
     z-index: 2;
     display: inline-flex;
     align-items: center;
