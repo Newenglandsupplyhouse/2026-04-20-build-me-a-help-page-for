@@ -273,23 +273,6 @@
       }
     };
 
-    const pinDesktopPageToTop = (durationMs = 1200) => {
-      if (isMobileViewport()) {
-        return;
-      }
-
-      const startedAt = Date.now();
-
-      const tick = () => {
-        scrollDesktopPageToTop();
-        if (Date.now() - startedAt < durationMs) {
-          window.requestAnimationFrame(tick);
-        }
-      };
-
-      tick();
-    };
-
     window.addEventListener("message", (event) => {
       if (!frame || event.origin !== frameOrigin || !event.data) {
         return;
@@ -310,7 +293,7 @@
     if (frame && resetButton) {
       const initialSrc = frame.getAttribute("src");
       const loadFreshFrame = () => {
-        pinDesktopPageToTop();
+        scrollDesktopPageToTop();
         setMobileFrameShift(0);
         const baseUrl = new URL(initialSrc, window.location.href);
         const freshUrl = new URL(baseUrl.toString());
@@ -320,16 +303,16 @@
         frame.setAttribute("src", "about:blank");
         window.setTimeout(() => {
           frame.setAttribute("src", resetUrl.toString());
-          pinDesktopPageToTop();
+          scrollDesktopPageToTop();
         }, 20);
-        window.setTimeout(pinDesktopPageToTop, 120);
-        window.setTimeout(pinDesktopPageToTop, 400);
+        window.setTimeout(scrollDesktopPageToTop, 120);
+        window.setTimeout(scrollDesktopPageToTop, 400);
       };
 
       frame.addEventListener("load", () => {
-        pinDesktopPageToTop();
-        window.setTimeout(pinDesktopPageToTop, 50);
-        window.setTimeout(pinDesktopPageToTop, 250);
+        scrollDesktopPageToTop();
+        window.setTimeout(scrollDesktopPageToTop, 50);
+        window.setTimeout(scrollDesktopPageToTop, 250);
       });
 
       resetButton.addEventListener("mousedown", (event) => {
@@ -351,15 +334,15 @@
     updateViewportHeight();
     updateHeaderOffset();
     if (!isMobileViewport()) {
-      pinDesktopPageToTop();
+      scrollDesktopPageToTop();
       window.visualViewport?.addEventListener("resize", updateViewportHeight);
       window.visualViewport?.addEventListener("scroll", updateViewportHeight);
-      window.addEventListener("load", () => pinDesktopPageToTop());
-      window.addEventListener("pageshow", () => pinDesktopPageToTop());
-      document.addEventListener("readystatechange", () => pinDesktopPageToTop());
-      setTimeout(pinDesktopPageToTop, 50);
-      setTimeout(pinDesktopPageToTop, 250);
-      setTimeout(pinDesktopPageToTop, 750);
+      window.addEventListener("load", scrollDesktopPageToTop);
+      window.addEventListener("pageshow", scrollDesktopPageToTop);
+      document.addEventListener("readystatechange", scrollDesktopPageToTop);
+      setTimeout(scrollDesktopPageToTop, 50);
+      setTimeout(scrollDesktopPageToTop, 250);
+      setTimeout(scrollDesktopPageToTop, 750);
     }
     window.addEventListener("orientationchange", updateViewportHeight);
     window.addEventListener("resize", updateViewportHeight);
