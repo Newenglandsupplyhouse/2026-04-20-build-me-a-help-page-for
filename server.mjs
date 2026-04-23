@@ -369,14 +369,6 @@ function getInjectedChatbaseOverrides() {
           margin-bottom: 12px !important;
         }
 
-        @media (max-width: 749px) and (orientation: portrait) {
-          main[data-theme="dark"] > header + div:has([data-has-messages="false"]) > div > div > div:first-child h1 {
-            font-size: 36px !important;
-            line-height: 1.08 !important;
-            letter-spacing: -0.03em !important;
-          }
-        }
-
         main[data-theme="dark"] > header + div:has([data-has-messages="false"]) [data-has-messages="false"] {
           min-height: auto !important;
           height: auto !important;
@@ -612,8 +604,6 @@ function getInjectedChatbaseOverrides() {
           const wrap = heading.parentElement;
           const outerWrap = wrap?.parentElement;
           const clampedWidth = Math.max(220, Math.round(inputRect.width));
-          const isPortraitMobile = isMobileViewport() && window.innerHeight >= window.innerWidth;
-          const portraitNudge = isPortraitMobile ? 14 : 0;
 
           if (!wrap) {
             return;
@@ -633,7 +623,6 @@ function getInjectedChatbaseOverrides() {
             wrap.style.setProperty('margin-left', 'auto', 'important');
             wrap.style.setProperty('margin-right', 'auto', 'important');
             wrap.style.setProperty('text-align', 'center', 'important');
-            wrap.style.setProperty('transform', portraitNudge ? ('translateX(' + portraitNudge + 'px)') : 'none', 'important');
 
             heading.style.setProperty('display', 'block', 'important');
             heading.style.setProperty('width', '100%', 'important');
