@@ -117,13 +117,13 @@
   }
 
   #{{ section_id }} .shopify-chatbase-help-mobile__reset {
-    position: absolute;
+    position: fixed;
     left: 50%;
     right: auto;
     top: auto;
     bottom: max(calc(env(safe-area-inset-bottom, 0px) + 22px), 12px);
     transform: translateX(-50%);
-    z-index: 2;
+    z-index: 1001;
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -137,6 +137,8 @@
     font-weight: 600;
     line-height: 1;
     cursor: pointer;
+    pointer-events: auto;
+    touch-action: manipulation;
   }
 
   #{{ section_id }} .shopify-chatbase-help-mobile__reset-icon {
