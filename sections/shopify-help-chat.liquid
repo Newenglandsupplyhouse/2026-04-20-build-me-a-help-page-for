@@ -316,10 +316,12 @@
       });
 
       resetButton.addEventListener("mousedown", (event) => {
-        if (!isMobileViewport()) {
-          event.preventDefault();
-        }
+        event.preventDefault();
       });
+
+      resetButton.addEventListener("touchstart", (event) => {
+        event.preventDefault();
+      }, { passive: false });
 
       resetButton.addEventListener("click", () => {
         try {
