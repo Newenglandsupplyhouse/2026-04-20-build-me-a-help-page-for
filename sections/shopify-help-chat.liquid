@@ -250,29 +250,6 @@
       root.style.setProperty("--shopify-help-header-offset", `${headerOffset}px`);
     };
 
-    const scrollDesktopPageToTop = () => {
-      if (isMobileViewport()) {
-        return;
-      }
-
-      try {
-        if ("scrollRestoration" in history) {
-          history.scrollRestoration = "manual";
-        }
-      } catch {}
-
-      try {
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
-      } catch {}
-
-      try {
-        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-      } catch {
-        window.scrollTo(0, 0);
-      }
-    };
-
     window.addEventListener("message", (event) => {
       if (!frame || event.origin !== frameOrigin || !event.data) {
         return;
@@ -293,7 +270,6 @@
     if (frame && resetButton) {
       const initialSrc = frame.getAttribute("src");
       const loadFreshFrame = () => {
-        scrollDesktopPageToTop();
         setMobileFrameShift(0);
         const baseUrl = new URL(initialSrc, window.location.href);
         const freshUrl = new URL(baseUrl.toString());
@@ -303,10 +279,7 @@
         frame.setAttribute("src", "about:blank");
         window.setTimeout(() => {
           frame.setAttribute("src", resetUrl.toString());
-          scrollDesktopPageToTop();
         }, 20);
-        window.setTimeout(scrollDesktopPageToTop, 120);
-        window.setTimeout(scrollDesktopPageToTop, 400);
       };
 
       resetButton.addEventListener("click", () => {
@@ -319,6 +292,25 @@
     updateViewportHeight();
     updateHeaderOffset();
     if (!isMobileViewport()) {
+      const scrollDesktopPageToTop = () => {
+        try {
+          if ("scrollRestoration" in history) {
+            history.scrollRestoration = "manual";
+          }
+        } catch {}
+
+        try {
+          document.documentElement.scrollTop = 0;
+          document.body.scrollTop = 0;
+        } catch {}
+
+        try {
+          window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+        } catch {
+          window.scrollTo(0, 0);
+        }
+      };
+
       scrollDesktopPageToTop();
       window.visualViewport?.addEventListener("resize", updateViewportHeight);
       window.visualViewport?.addEventListener("scroll", updateViewportHeight);
