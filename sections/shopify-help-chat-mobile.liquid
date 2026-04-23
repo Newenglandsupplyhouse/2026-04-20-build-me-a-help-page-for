@@ -1,0 +1,252 @@
+{% liquid
+  assign section_id = 'shopify-help-chat-mobile-' | append: section.id
+  assign chatbase_proxy_url = section.settings.chatbase_proxy_url | default: 'https://shopify-help-chat.onrender.com/chatbase-help'
+  assign chatbase_url = section.settings.chatbase_url | default: 'https://www.chatbase.co/iQxwux6_Bjma9xxVgm8Nb/help'
+  assign iframe_url = chatbase_proxy_url
+
+  if iframe_url == blank
+    assign iframe_url = chatbase_url
+  endif
+%}
+
+<section class="shopify-chatbase-help-mobile" id="{{ section_id }}">
+  {% if iframe_url != blank %}
+    <button
+      class="shopify-chatbase-help-mobile__reset"
+      type="button"
+      aria-label="Start over"
+      title="Start over"
+    >
+      <span class="shopify-chatbase-help-mobile__reset-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M20 11a8 8 0 1 0-2.34 5.66" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M20 4v7h-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="shopify-chatbase-help-mobile__reset-text">Start over</span>
+    </button>
+    <iframe
+      class="shopify-chatbase-help-mobile__frame"
+      src="{{ iframe_url | escape }}"
+      title="Mobile help page"
+      loading="eager"
+      allow="clipboard-write; microphone"
+    ></iframe>
+  {% else %}
+    <div class="shopify-chatbase-help-mobile__empty">
+      <h2 class="shopify-chatbase-help-mobile__empty-title">Add your Chatbase help page URL</h2>
+      <p class="shopify-chatbase-help-mobile__empty-text">Open this section in the theme editor and paste your Chatbase help page link.</p>
+    </div>
+  {% endif %}
+</section>
+
+<style>
+  body.shopify-chatbase-help-mobile-page,
+  body.shopify-chatbase-help-mobile-page #MainContent,
+  body.shopify-chatbase-help-mobile-page main {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #08080b !important;
+  }
+
+  body.shopify-chatbase-help-mobile-page footer,
+  body.shopify-chatbase-help-mobile-page header,
+  body.shopify-chatbase-help-mobile-page [role="banner"],
+  body.shopify-chatbase-help-mobile-page .shopify-section-group-header-group,
+  body.shopify-chatbase-help-mobile-page .announcement-bar,
+  body.shopify-chatbase-help-mobile-page .utility-bar,
+  body.shopify-chatbase-help-mobile-page .top-bar,
+  body.shopify-chatbase-help-mobile-page [id*="countdown"],
+  body.shopify-chatbase-help-mobile-page [class*="countdown"],
+  body.shopify-chatbase-help-mobile-page [id*="timer"],
+  body.shopify-chatbase-help-mobile-page [class*="timer"],
+  body.shopify-chatbase-help-mobile-page [id*="shipping"],
+  body.shopify-chatbase-help-mobile-page [class*="shipping"],
+  body.shopify-chatbase-help-mobile-page [id*="announcement"],
+  body.shopify-chatbase-help-mobile-page [class*="announcement"] {
+    display: none !important;
+    pointer-events: none !important;
+  }
+
+  body.shopify-chatbase-help-mobile-page .shopify-section-group-footer-group,
+  body.shopify-chatbase-help-mobile-page [id*="shopify-section"][id*="footer"] {
+    display: none !important;
+  }
+
+  #{{ section_id }} {
+    --shopify-help-mobile-safe-top: env(safe-area-inset-top, 0px);
+    --shopify-help-mobile-safe-right: env(safe-area-inset-right, 0px);
+    --shopify-help-mobile-vh: 100dvh;
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    background: #08080b;
+    overflow: hidden;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help-mobile__frame,
+  #{{ section_id }} .shopify-chatbase-help-mobile__empty {
+    display: block;
+    width: 100%;
+    height: var(--shopify-help-mobile-vh);
+    min-height: var(--shopify-help-mobile-vh);
+    border: 0;
+    background: #08080b;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help-mobile__empty {
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    text-align: center;
+    color: #f5f5f7;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help-mobile__empty-title {
+    margin: 0 0 10px;
+    font-size: 1.75rem;
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help-mobile__empty-text {
+    margin: 0;
+    color: #a2a3aa;
+    font-size: 0.98rem;
+    line-height: 1.5;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help-mobile__reset {
+    position: absolute;
+    top: calc(var(--shopify-help-mobile-safe-top) + 10px);
+    right: max(12px, var(--shopify-help-mobile-safe-right));
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    background: rgba(17, 17, 22, 0.92);
+    color: #f5f5f7;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help-mobile__reset-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help-mobile__reset-icon svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  @media screen and (min-width: 750px) {
+    #{{ section_id }} {
+      position: relative;
+      min-height: 100vh;
+    }
+
+    #{{ section_id }} .shopify-chatbase-help-mobile__frame,
+    #{{ section_id }} .shopify-chatbase-help-mobile__empty {
+      height: 100vh;
+      min-height: 100vh;
+    }
+  }
+</style>
+
+<script>
+  (() => {
+    const root = document.getElementById({{ section_id | json }});
+    if (!root) {
+      return;
+    }
+
+    const pageRoot = document.documentElement;
+    const body = document.body;
+    const frame = root.querySelector(".shopify-chatbase-help-mobile__frame");
+    const resetButton = root.querySelector(".shopify-chatbase-help-mobile__reset");
+    const initialSrc = frame ? frame.getAttribute("src") : "";
+
+    if (pageRoot) {
+      pageRoot.style.overflow = "hidden";
+      pageRoot.style.height = "100%";
+      pageRoot.style.background = "#08080b";
+    }
+
+    if (body) {
+      body.classList.add("shopify-chatbase-help-mobile-page");
+      body.style.overflow = "hidden";
+      body.style.height = "100%";
+      body.style.minHeight = "100%";
+      body.style.background = "#08080b";
+    }
+
+    const updateViewportHeight = () => {
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      root.style.setProperty("--shopify-help-mobile-vh", `${Math.round(viewportHeight)}px`);
+    };
+
+    const loadFreshFrame = () => {
+      if (!frame || !initialSrc) {
+        return;
+      }
+
+      const baseUrl = new URL(initialSrc, window.location.href);
+      const freshUrl = new URL(baseUrl.toString());
+      freshUrl.searchParams.set("reset", String(Date.now()));
+      const resetUrl = new URL("/chatbase-help/reset", baseUrl.origin);
+      resetUrl.searchParams.set("next", freshUrl.toString());
+      frame.setAttribute("src", "about:blank");
+      window.setTimeout(() => {
+        frame.setAttribute("src", resetUrl.toString());
+      }, 20);
+    };
+
+    if (resetButton) {
+      resetButton.addEventListener("click", () => {
+        loadFreshFrame();
+      });
+    }
+
+    updateViewportHeight();
+    window.addEventListener("load", updateViewportHeight);
+    window.addEventListener("resize", updateViewportHeight);
+    window.addEventListener("orientationchange", updateViewportHeight);
+    window.visualViewport?.addEventListener("resize", updateViewportHeight);
+    window.visualViewport?.addEventListener("scroll", updateViewportHeight);
+    setTimeout(updateViewportHeight, 250);
+    setTimeout(updateViewportHeight, 1000);
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Shopify Help Chat Mobile",
+  "settings": [
+    {
+      "type": "url",
+      "id": "chatbase_proxy_url",
+      "label": "Chatbase proxy URL",
+      "info": "Recommended. Paste your proxied help page URL, for example https://shopify-help-chat.onrender.com/chatbase-help"
+    },
+    {
+      "type": "url",
+      "id": "chatbase_url",
+      "label": "Direct Chatbase help page URL",
+      "info": "Optional fallback. Paste your direct Chatbase help page URL if you are not using the proxy."
+    }
+  ],
+  "presets": [
+    {
+      "name": "Shopify Help Chat Mobile"
+    }
+  ]
+}
+{% endschema %}

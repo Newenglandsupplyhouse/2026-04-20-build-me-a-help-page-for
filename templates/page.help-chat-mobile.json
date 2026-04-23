@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "shopify-help-chat-mobile",
+      "settings": {
+        "chatbase_proxy_url": "https://shopify-help-chat.onrender.com/chatbase-help",
+        "chatbase_url": "https://www.chatbase.co/iQxwux6_Bjma9xxVgm8Nb/help"
+      }
+    }
+  },
+  "order": [
+    "main"
+  ]
+}
