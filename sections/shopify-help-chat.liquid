@@ -218,23 +218,8 @@
         '.top-bar'
       ];
 
-      const timerCandidates = [...document.querySelectorAll("body *")].filter((element) => {
-        const tagName = (element.tagName || "").toLowerCase();
-        const className = typeof element.className === "string" ? element.className.toLowerCase() : "";
-        const id = (element.id || "").toLowerCase();
-
-        return (
-          tagName.startsWith("countdown-timer-") ||
-          className.includes("countdown") ||
-          className.includes("timer") ||
-          id.includes("countdown") ||
-          id.includes("timer")
-        );
-      });
-
       const candidates = selectors
         .flatMap((selector) => [...document.querySelectorAll(selector)])
-        .concat(timerCandidates)
         .filter((element, index, array) => array.indexOf(element) === index)
         .filter((element) => !root.contains(element))
         .filter((element) => {
@@ -284,7 +269,7 @@
 
     if (frame && resetButton) {
       const initialSrc = frame.getAttribute("src");
-      const loadFreshFrame = () => {
+      resetButton.addEventListener("click", () => {
         setMobileFrameShift(0);
         const baseUrl = new URL(initialSrc, window.location.href);
         const freshUrl = new URL(baseUrl.toString());
@@ -295,15 +280,7 @@
         window.setTimeout(() => {
           frame.setAttribute("src", resetUrl.toString());
         }, 20);
-      };
-
-      resetButton.addEventListener("click", () => {
-        loadFreshFrame();
       });
-
-      if (isMobileViewport()) {
-        loadFreshFrame();
-      }
     }
 
     updateViewportHeight();
