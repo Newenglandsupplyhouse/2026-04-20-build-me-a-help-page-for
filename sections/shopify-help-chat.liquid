@@ -250,6 +250,35 @@
       root.style.setProperty("--shopify-help-header-offset", `${headerOffset}px`);
     };
 
+    const disableMobileTimerInterception = () => {
+      if (!isMobileViewport()) {
+        return;
+      }
+
+      const timerCandidates = [...document.querySelectorAll("body *")].filter((element) => {
+        const tagName = (element.tagName || "").toLowerCase();
+        const className = typeof element.className === "string" ? element.className.toLowerCase() : "";
+        const id = (element.id || "").toLowerCase();
+        const text = (element.textContent || "").toLowerCase();
+
+        return (
+          tagName.startsWith("countdown-timer-") ||
+          className.includes("countdown") ||
+          className.includes("timer") ||
+          id.includes("countdown") ||
+          id.includes("timer") ||
+          text.includes("same day shipping") ||
+          text.includes("order by 3pm")
+        );
+      });
+
+      timerCandidates.forEach((element) => {
+        try {
+          element.style.pointerEvents = "none";
+        } catch {}
+      });
+    };
+
     window.addEventListener("message", (event) => {
       if (!frame || event.origin !== frameOrigin || !event.data) {
         return;
@@ -285,6 +314,7 @@
 
     updateViewportHeight();
     updateHeaderOffset();
+    disableMobileTimerInterception();
     if (!isMobileViewport()) {
       window.visualViewport?.addEventListener("resize", updateViewportHeight);
       window.visualViewport?.addEventListener("scroll", updateViewportHeight);
@@ -293,11 +323,15 @@
     window.addEventListener("resize", updateViewportHeight);
     window.addEventListener("resize", () => setMobileFrameShift(0));
     window.addEventListener("resize", updateHeaderOffset);
+    window.addEventListener("resize", disableMobileTimerInterception);
     window.addEventListener("load", updateHeaderOffset);
     window.addEventListener("load", updateViewportHeight);
+    window.addEventListener("load", disableMobileTimerInterception);
     setTimeout(updateHeaderOffset, 250);
     setTimeout(updateHeaderOffset, 1000);
     setTimeout(updateViewportHeight, 250);
+    setTimeout(disableMobileTimerInterception, 250);
+    setTimeout(disableMobileTimerInterception, 1000);
   })();
 </script>
 
