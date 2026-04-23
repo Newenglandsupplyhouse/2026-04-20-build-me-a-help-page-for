@@ -53,9 +53,14 @@
     --shopify-help-safe-bottom: env(safe-area-inset-bottom, 0px);
     --shopify-help-mobile-frame-shift: 0px;
     box-sizing: border-box;
-    height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
-    min-height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
-    position: relative;
+    height: auto;
+    min-height: 0;
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--shopify-help-header-offset);
+    bottom: 0;
+    z-index: 2;
     background: #08080b;
     overflow: hidden;
   }
@@ -63,20 +68,15 @@
   @media screen and (max-width: 749px) {
     #{{ section_id }} {
       --shopify-help-header-offset: 0px;
-      position: fixed;
-      left: 0;
-      right: 0;
       top: var(--shopify-help-header-offset);
-      bottom: 0;
-      z-index: 2;
     }
   }
 
   #{{ section_id }} .shopify-chatbase-help__frame {
     display: block;
     width: 100%;
-    height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
-    min-height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
+    height: 100%;
+    min-height: 100%;
     border: 0;
     background: #08080b;
     transform: translateY(var(--shopify-help-mobile-frame-shift));
@@ -85,8 +85,8 @@
   }
 
   #{{ section_id }} .shopify-chatbase-help__empty {
-    height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
-    min-height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
+    height: 100%;
+    min-height: 100%;
     display: grid;
     place-items: center;
     padding: 24px;
