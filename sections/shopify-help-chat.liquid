@@ -250,6 +250,55 @@
       root.style.setProperty("--shopify-help-header-offset", `${headerOffset}px`);
     };
 
+    const disableMobileTopTapInterference = () => {
+      if (!isMobileViewport()) {
+        [...document.querySelectorAll("[data-shopify-help-mobile-pass-through='true']")].forEach((element) => {
+          element.style.pointerEvents = "";
+          delete element.dataset.shopifyHelpMobilePassThrough;
+        });
+        return;
+      }
+
+      const selectors = [
+        "[id*='countdown']",
+        "[class*='countdown']",
+        "[id*='timer']",
+        "[class*='timer']",
+        "[id*='shipping']",
+        "[class*='shipping']",
+        "[id*='announcement']",
+        "[class*='announcement']"
+      ];
+
+      const textMatchers = [
+        "same day shipping",
+        "order by",
+        "days",
+        "hours",
+        "mins",
+        "secs"
+      ];
+
+      const candidates = selectors
+        .flatMap((selector) => [...document.querySelectorAll(selector)])
+        .filter((element, index, array) => array.indexOf(element) === index)
+        .filter((element) => !root.contains(element))
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          if (rect.height <= 0 || rect.height > 260 || rect.bottom <= 0 || rect.top > window.innerHeight * 0.5) {
+            return false;
+          }
+
+          const text = (element.textContent || "").trim().toLowerCase();
+          return textMatchers.some((matcher) => text.includes(matcher));
+        });
+
+      candidates.forEach((element) => {
+        element.style.pointerEvents = "none";
+        element.dataset.shopifyHelpMobilePassThrough = "true";
+      });
+    };
+
     const scrollDesktopPageToTop = () => {
       if (isMobileViewport()) {
         return;
@@ -335,6 +384,7 @@
 
     updateViewportHeight();
     updateHeaderOffset();
+    disableMobileTopTapInterference();
     if (!isMobileViewport()) {
       scrollDesktopPageToTop();
       window.visualViewport?.addEventListener("resize", updateViewportHeight);
@@ -347,14 +397,20 @@
       setTimeout(scrollDesktopPageToTop, 750);
     }
     window.addEventListener("orientationchange", updateViewportHeight);
+    window.addEventListener("orientationchange", disableMobileTopTapInterference);
     window.addEventListener("resize", updateViewportHeight);
     window.addEventListener("resize", () => setMobileFrameShift(0));
     window.addEventListener("resize", updateHeaderOffset);
+    window.addEventListener("resize", disableMobileTopTapInterference);
     window.addEventListener("load", updateHeaderOffset);
     window.addEventListener("load", updateViewportHeight);
+    window.addEventListener("load", disableMobileTopTapInterference);
     setTimeout(updateHeaderOffset, 250);
     setTimeout(updateHeaderOffset, 1000);
     setTimeout(updateViewportHeight, 250);
+    setTimeout(disableMobileTopTapInterference, 250);
+    setTimeout(disableMobileTopTapInterference, 1000);
+    setTimeout(disableMobileTopTapInterference, 2000);
   })();
 </script>
 
