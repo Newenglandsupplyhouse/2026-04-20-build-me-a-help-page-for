@@ -113,7 +113,7 @@
   #{{ section_id }} .shopify-chatbase-help__reset {
     position: absolute;
     right: max(18px, calc(50% - 340px));
-    bottom: max(calc(176px + var(--shopify-help-safe-bottom)), 24px);
+    bottom: max(calc(240px + var(--shopify-help-safe-bottom)), 24px);
     z-index: 3;
     display: inline-flex;
     align-items: center;
@@ -250,33 +250,27 @@
       root.style.setProperty("--shopify-help-header-offset", `${headerOffset}px`);
     };
 
-    const disableMobileTimerInterception = () => {
-      if (!isMobileViewport()) {
+    const scrollDesktopPageToTop = () => {
+      if (isMobileViewport()) {
         return;
       }
 
-      const timerCandidates = [...document.querySelectorAll("body *")].filter((element) => {
-        const tagName = (element.tagName || "").toLowerCase();
-        const className = typeof element.className === "string" ? element.className.toLowerCase() : "";
-        const id = (element.id || "").toLowerCase();
-        const text = (element.textContent || "").toLowerCase();
+      try {
+        if ("scrollRestoration" in history) {
+          history.scrollRestoration = "manual";
+        }
+      } catch {}
 
-        return (
-          tagName.startsWith("countdown-timer-") ||
-          className.includes("countdown") ||
-          className.includes("timer") ||
-          id.includes("countdown") ||
-          id.includes("timer") ||
-          text.includes("same day shipping") ||
-          text.includes("order by 3pm")
-        );
-      });
+      try {
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      } catch {}
 
-      timerCandidates.forEach((element) => {
-        try {
-          element.style.pointerEvents = "none";
-        } catch {}
-      });
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      } catch {
+        window.scrollTo(0, 0);
+      }
     };
 
     window.addEventListener("message", (event) => {
@@ -298,7 +292,8 @@
 
     if (frame && resetButton) {
       const initialSrc = frame.getAttribute("src");
-      resetButton.addEventListener("click", () => {
+      const loadFreshFrame = () => {
+        scrollDesktopPageToTop();
         setMobileFrameShift(0);
         const baseUrl = new URL(initialSrc, window.location.href);
         const freshUrl = new URL(baseUrl.toString());
@@ -308,30 +303,58 @@
         frame.setAttribute("src", "about:blank");
         window.setTimeout(() => {
           frame.setAttribute("src", resetUrl.toString());
+          scrollDesktopPageToTop();
         }, 20);
+        window.setTimeout(scrollDesktopPageToTop, 120);
+        window.setTimeout(scrollDesktopPageToTop, 400);
+      };
+
+      frame.addEventListener("load", () => {
+        scrollDesktopPageToTop();
+        window.setTimeout(scrollDesktopPageToTop, 50);
+        window.setTimeout(scrollDesktopPageToTop, 250);
       });
+
+      resetButton.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+      });
+
+      resetButton.addEventListener("touchstart", (event) => {
+        event.preventDefault();
+      }, { passive: false });
+
+      resetButton.addEventListener("click", () => {
+        try {
+          resetButton.blur();
+        } catch {}
+        loadFreshFrame();
+      });
+
+      loadFreshFrame();
     }
 
     updateViewportHeight();
     updateHeaderOffset();
-    disableMobileTimerInterception();
     if (!isMobileViewport()) {
+      scrollDesktopPageToTop();
       window.visualViewport?.addEventListener("resize", updateViewportHeight);
       window.visualViewport?.addEventListener("scroll", updateViewportHeight);
+      window.addEventListener("load", scrollDesktopPageToTop);
+      window.addEventListener("pageshow", scrollDesktopPageToTop);
+      document.addEventListener("readystatechange", scrollDesktopPageToTop);
+      setTimeout(scrollDesktopPageToTop, 50);
+      setTimeout(scrollDesktopPageToTop, 250);
+      setTimeout(scrollDesktopPageToTop, 750);
     }
     window.addEventListener("orientationchange", updateViewportHeight);
     window.addEventListener("resize", updateViewportHeight);
     window.addEventListener("resize", () => setMobileFrameShift(0));
     window.addEventListener("resize", updateHeaderOffset);
-    window.addEventListener("resize", disableMobileTimerInterception);
     window.addEventListener("load", updateHeaderOffset);
     window.addEventListener("load", updateViewportHeight);
-    window.addEventListener("load", disableMobileTimerInterception);
     setTimeout(updateHeaderOffset, 250);
     setTimeout(updateHeaderOffset, 1000);
     setTimeout(updateViewportHeight, 250);
-    setTimeout(disableMobileTimerInterception, 250);
-    setTimeout(disableMobileTimerInterception, 1000);
   })();
 </script>
 

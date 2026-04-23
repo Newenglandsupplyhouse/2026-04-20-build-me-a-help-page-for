@@ -251,15 +251,18 @@ function getInjectedChatbaseOverrides() {
         display: none !important;
       }
 
-      footer a:has(> span.select-none.font-medium.text-xs.text-zinc-500\\/90) svg {
+      footer a[href*="chatbase.co"] svg,
+      footer a[target="_blank"][rel~="noopener"] svg {
         display: none !important;
       }
 
-      footer span.select-none.font-medium.text-xs.text-zinc-500\\/90 {
+      footer a[href*="chatbase.co"] span,
+      footer a[target="_blank"][rel~="noopener"] span.select-none.font-medium.text-xs.text-zinc-500\\/90 {
         font-size: 0 !important;
       }
 
-      footer span.select-none.font-medium.text-xs.text-zinc-500\\/90::after {
+      footer a[href*="chatbase.co"] span::after,
+      footer a[target="_blank"][rel~="noopener"] span.select-none.font-medium.text-xs.text-zinc-500\\/90::after {
         content: "Built by New England Supply House";
         font-size: 12px;
       }
@@ -367,6 +370,14 @@ function getInjectedChatbaseOverrides() {
         main[data-theme="dark"] > header + div:has([data-has-messages="false"]) > div > div > div:first-child h1 {
           margin-top: 0 !important;
           margin-bottom: 12px !important;
+        }
+
+        @media (max-width: 749px) and (orientation: portrait) {
+          main[data-theme="dark"] > header + div:has([data-has-messages="false"]) > div > div > div:first-child h1 {
+            font-size: 36px !important;
+            line-height: 1.08 !important;
+            letter-spacing: -0.03em !important;
+          }
         }
 
         main[data-theme="dark"] > header + div:has([data-has-messages="false"]) [data-has-messages="false"] {
@@ -604,6 +615,8 @@ function getInjectedChatbaseOverrides() {
           const wrap = heading.parentElement;
           const outerWrap = wrap?.parentElement;
           const clampedWidth = Math.max(220, Math.round(inputRect.width));
+          const isPortraitMobile = isMobileViewport() && window.innerHeight >= window.innerWidth;
+          const portraitNudge = isPortraitMobile ? 14 : 0;
 
           if (!wrap) {
             return;
@@ -623,6 +636,7 @@ function getInjectedChatbaseOverrides() {
             wrap.style.setProperty('margin-left', 'auto', 'important');
             wrap.style.setProperty('margin-right', 'auto', 'important');
             wrap.style.setProperty('text-align', 'center', 'important');
+            wrap.style.setProperty('transform', portraitNudge ? ('translateX(' + portraitNudge + 'px)') : 'none', 'important');
 
             heading.style.setProperty('display', 'block', 'important');
             heading.style.setProperty('width', '100%', 'important');
@@ -747,16 +761,23 @@ function getInjectedChatbaseOverrides() {
 }
 
 function injectChatbaseOverrides(html) {
+  const rewrittenHtml = html
+    .replace(
+      /<a href="https:\/\/chatbase\.co" target="_blank" class="flex items-center justify-center gap-1\.5" rel="noopener"><svg[\s\S]*?<\/svg><span class="select-none font-medium text-xs text-zinc-500\/90">Powered by Chatbase<\/span><\/a>/,
+      '<a href="https://newenglandsupplyhouse.com" target="_blank" class="flex items-center justify-center gap-1.5" rel="noopener"><span class="select-none font-medium text-xs text-zinc-500/90">Built by New England Supply House</span></a>'
+    )
+    .replace(/Powered by Chatbase/g, "Built by New England Supply House");
+
   const injection = getInjectedChatbaseOverrides();
-  if (html.includes("nesh-chatbase-sidebar-overrides")) {
-    return html;
+  if (rewrittenHtml.includes("nesh-chatbase-sidebar-overrides")) {
+    return rewrittenHtml;
   }
 
-  if (html.includes("</head>")) {
-    return html.replace("</head>", `${injection}</head>`);
+  if (rewrittenHtml.includes("</head>")) {
+    return rewrittenHtml.replace("</head>", `${injection}</head>`);
   }
 
-  return `${injection}${html}`;
+  return `${injection}${rewrittenHtml}`;
 }
 
 async function proxyChatbaseRequest(request, response, targetUrl, options = {}) {
@@ -774,6 +795,12 @@ async function proxyChatbaseRequest(request, response, targetUrl, options = {}) 
   if (options.injectHtml && contentType.includes("text/html")) {
     const html = injectChatbaseOverrides(await upstreamResponse.text());
     headers["content-type"] = "text/html; charset=utf-8";
+    headers["cache-control"] = "no-store, no-cache, must-revalidate, proxy-revalidate";
+    headers["pragma"] = "no-cache";
+    headers["expires"] = "0";
+    delete headers.etag;
+    delete headers.age;
+    delete headers.vary;
     response.writeHead(upstreamResponse.status, headers);
     response.end(html);
     return;
