@@ -218,8 +218,23 @@
         '.top-bar'
       ];
 
+      const timerCandidates = [...document.querySelectorAll("body *")].filter((element) => {
+        const tagName = (element.tagName || "").toLowerCase();
+        const className = typeof element.className === "string" ? element.className.toLowerCase() : "";
+        const id = (element.id || "").toLowerCase();
+
+        return (
+          tagName.startsWith("countdown-timer-") ||
+          className.includes("countdown") ||
+          className.includes("timer") ||
+          id.includes("countdown") ||
+          id.includes("timer")
+        );
+      });
+
       const candidates = selectors
         .flatMap((selector) => [...document.querySelectorAll(selector)])
+        .concat(timerCandidates)
         .filter((element, index, array) => array.indexOf(element) === index)
         .filter((element) => !root.contains(element))
         .filter((element) => {
