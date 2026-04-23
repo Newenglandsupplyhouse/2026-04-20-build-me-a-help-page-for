@@ -788,12 +788,6 @@ async function proxyChatbaseRequest(request, response, targetUrl, options = {}) 
   if (options.injectHtml && contentType.includes("text/html")) {
     const html = injectChatbaseOverrides(await upstreamResponse.text());
     headers["content-type"] = "text/html; charset=utf-8";
-    headers["cache-control"] = "no-store, no-cache, must-revalidate, proxy-revalidate";
-    headers["pragma"] = "no-cache";
-    headers["expires"] = "0";
-    delete headers.etag;
-    delete headers.age;
-    delete headers.vary;
     response.writeHead(upstreamResponse.status, headers);
     response.end(html);
     return;
