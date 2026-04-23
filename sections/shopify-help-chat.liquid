@@ -41,6 +41,19 @@
 </section>
 
 <style>
+  body.shopify-chatbase-help-page #MainContent {
+    position: fixed !important;
+    left: 0;
+    right: 0;
+    top: var(--shopify-help-global-header-offset, 164px);
+    bottom: 0;
+    overflow: hidden !important;
+  }
+
+  body.shopify-chatbase-help-page #shopify-section-{{ section.id }} {
+    height: 100% !important;
+  }
+
   body.shopify-chatbase-help-page footer,
   body.shopify-chatbase-help-page .shopify-section-group-footer-group,
   body.shopify-chatbase-help-page [id*="shopify-section"][id*="footer"] {
@@ -66,6 +79,10 @@
   }
 
   @media screen and (max-width: 749px) {
+    body.shopify-chatbase-help-page #MainContent {
+      top: 0;
+    }
+
     #{{ section_id }} {
       --shopify-help-header-offset: 0px;
       top: var(--shopify-help-header-offset);
@@ -248,6 +265,8 @@
         : Math.max(measuredOffset, fallbackOffset);
 
       root.style.setProperty("--shopify-help-header-offset", `${headerOffset}px`);
+      pageRoot?.style.setProperty("--shopify-help-global-header-offset", `${headerOffset}px`);
+      body?.style.setProperty("--shopify-help-global-header-offset", `${headerOffset}px`);
     };
 
     const scrollDesktopPageToTop = () => {
