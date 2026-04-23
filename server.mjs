@@ -251,18 +251,15 @@ function getInjectedChatbaseOverrides() {
         display: none !important;
       }
 
-      footer a[href*="chatbase.co"] svg,
-      footer a[target="_blank"][rel~="noopener"] svg {
+      footer a:has(> span.select-none.font-medium.text-xs.text-zinc-500\\/90) svg {
         display: none !important;
       }
 
-      footer a[href*="chatbase.co"] span,
-      footer a[target="_blank"][rel~="noopener"] span.select-none.font-medium.text-xs.text-zinc-500\\/90 {
+      footer span.select-none.font-medium.text-xs.text-zinc-500\\/90 {
         font-size: 0 !important;
       }
 
-      footer a[href*="chatbase.co"] span::after,
-      footer a[target="_blank"][rel~="noopener"] span.select-none.font-medium.text-xs.text-zinc-500\\/90::after {
+      footer span.select-none.font-medium.text-xs.text-zinc-500\\/90::after {
         content: "Built by New England Supply House";
         font-size: 12px;
       }
