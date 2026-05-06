@@ -1,0 +1,379 @@
+<section class="nesh-cc-page" aria-labelledby="nesh-cc-title">
+  <style>
+    .nesh-cc-page {
+      --ink: #14213d;
+      --muted: #475569;
+      --blue: #1d4ed8;
+      --orange: #f97316;
+      --line: #dbe4ef;
+      --paper: #f8fafc;
+      --warm: #fff7ed;
+      background: #fff;
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.45;
+      overflow-x: hidden;
+    }
+    .nesh-cc-page * { box-sizing: border-box; }
+    .nesh-cc-page h1,
+    .nesh-cc-page h2,
+    .nesh-cc-page h3,
+    .nesh-cc-page p,
+    .nesh-cc-page li { white-space: normal; }
+    .nesh-cc-wrap {
+      width: 100%;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+    .nesh-cc-hero {
+      min-height: 620px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr);
+      gap: 42px;
+      align-items: center;
+      padding: 58px 0 46px;
+      border-bottom: 1px solid var(--line);
+    }
+    .nesh-cc-kicker {
+      margin: 0 0 12px;
+      color: var(--orange);
+      font-size: 14px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .nesh-cc-title {
+      margin: 0;
+      max-width: 850px;
+      color: var(--ink);
+      font-size: clamp(42px, 6vw, 78px);
+      line-height: .96;
+      font-weight: 900;
+    }
+    .nesh-cc-subtitle {
+      margin: 20px 0 0;
+      max-width: 680px;
+      color: var(--muted);
+      font-size: clamp(18px, 2.15vw, 25px);
+    }
+    .nesh-cc-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 28px;
+    }
+    .nesh-cc-button {
+      display: inline-flex;
+      min-height: 48px;
+      align-items: center;
+      justify-content: center;
+      padding: 13px 20px;
+      border: 1px solid var(--ink);
+      border-radius: 6px;
+      background: var(--ink);
+      color: #fff;
+      font-weight: 800;
+      text-decoration: none;
+    }
+    .nesh-cc-button.secondary {
+      background: #fff;
+      color: var(--ink);
+    }
+    .nesh-cc-trust,
+    .nesh-cc-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .nesh-cc-trust { margin-top: 32px; }
+    .nesh-cc-pill,
+    .nesh-cc-card,
+    .nesh-cc-step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+    .nesh-cc-pill { min-height: 92px; padding: 16px; }
+    .nesh-cc-pill strong,
+    .nesh-cc-card h3 {
+      display: block;
+      color: var(--blue);
+      font-size: 20px;
+      line-height: 1.1;
+    }
+    .nesh-cc-pill span,
+    .nesh-cc-card p,
+    .nesh-cc-card li,
+    .nesh-cc-step p {
+      color: var(--muted);
+      font-size: 15px;
+    }
+    .nesh-cc-product {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+      box-shadow: 0 18px 52px rgba(20, 33, 61, .12);
+    }
+    .nesh-cc-product-image {
+      min-height: 310px;
+      display: grid;
+      place-items: center;
+      padding: 30px;
+      background: linear-gradient(180deg, #f8fafc 0%, #eef4fb 100%);
+    }
+    .nesh-cc-converter {
+      position: relative;
+      width: min(100%, 440px);
+      aspect-ratio: 2.55 / 1;
+    }
+    .nesh-cc-converter:before,
+    .nesh-cc-converter:after {
+      content: "";
+      position: absolute;
+      top: 44%;
+      width: 27%;
+      height: 16%;
+      border: 4px solid #334155;
+      border-radius: 999px;
+      background: #b8c4d2;
+    }
+    .nesh-cc-converter:before { left: 0; }
+    .nesh-cc-converter:after { right: 0; }
+    .nesh-cc-converter-body {
+      position: absolute;
+      inset: 10% 20%;
+      z-index: 1;
+      border: 6px solid #334155;
+      border-radius: 999px;
+      background: #e2e8f0;
+      box-shadow: 0 20px 35px rgba(15, 23, 42, .18);
+    }
+    .nesh-cc-converter-body:before {
+      content: "";
+      position: absolute;
+      inset: 18% 12%;
+      border: 2px solid #94a3b8;
+      border-radius: 999px;
+      background: repeating-linear-gradient(78deg, transparent 0 28px, #94a3b8 30px 34px), #f8fafc;
+    }
+    .nesh-cc-converter-body:after {
+      content: "";
+      position: absolute;
+      left: 18%;
+      right: 18%;
+      top: 49%;
+      height: 5px;
+      background: #475569;
+    }
+    .nesh-cc-product-copy { padding: 24px; }
+    .nesh-cc-price {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .nesh-cc-price strong {
+      color: var(--blue);
+      font-size: 34px;
+      line-height: 1;
+    }
+    .nesh-cc-price span {
+      color: var(--muted);
+      text-decoration: line-through;
+    }
+    .nesh-cc-section { padding: 52px 0; }
+    .nesh-cc-section h2 {
+      margin: 0 0 18px;
+      color: var(--ink);
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.05;
+    }
+    .nesh-cc-card {
+      padding: 24px;
+      background: #fff;
+    }
+    .nesh-cc-card h3 { margin: 0 0 10px; }
+    .nesh-cc-card ul { margin: 0; padding-left: 20px; }
+    .nesh-cc-steps {
+      counter-reset: step;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .nesh-cc-step {
+      position: relative;
+      min-height: 166px;
+      padding: 48px 18px 18px;
+    }
+    .nesh-cc-step:before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      top: 16px;
+      left: 18px;
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--orange);
+      color: #fff;
+      font-weight: 900;
+    }
+    .nesh-cc-step h3 { margin: 0 0 8px; font-size: 18px; }
+    .nesh-cc-step p { margin: 0; }
+    .nesh-cc-final {
+      padding: 42px;
+      border-radius: 8px;
+      background: var(--ink);
+      color: #fff;
+    }
+    .nesh-cc-final h2 { color: #fff; }
+    .nesh-cc-final p {
+      max-width: 740px;
+      color: #dbeafe;
+      font-size: 18px;
+    }
+    .nesh-cc-final .nesh-cc-button {
+      border-color: var(--orange);
+      background: var(--orange);
+    }
+    .nesh-cc-final .nesh-cc-button.secondary {
+      border-color: #fff;
+      background: #fff;
+      color: var(--ink);
+    }
+    .nesh-cc-note {
+      margin-top: 18px;
+      color: #cbd5e1;
+      font-size: 13px;
+    }
+    @media (max-width: 860px) {
+      .nesh-cc-wrap {
+        width: calc(100vw - 32px);
+        max-width: calc(100vw - 32px);
+        padding: 0;
+      }
+      .nesh-cc-hero,
+      .nesh-cc-grid,
+      .nesh-cc-steps,
+      .nesh-cc-trust {
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
+      .nesh-cc-title {
+        max-width: 100%;
+        font-size: clamp(28px, 7.6vw, 30px);
+        line-height: 1.02;
+        overflow-wrap: anywhere;
+      }
+      .nesh-cc-subtitle {
+        max-width: 100%;
+        font-size: 16px;
+        overflow-wrap: anywhere;
+      }
+      .nesh-cc-actions { flex-direction: column; }
+      .nesh-cc-button { width: 100%; }
+      .nesh-cc-product {
+        order: 2;
+        width: 100%;
+        max-width: 100%;
+      }
+      .nesh-cc-product-image {
+        min-height: 235px;
+        padding: 20px;
+      }
+      .nesh-cc-final { padding: 26px; }
+      .nesh-cc-pill,
+      .nesh-cc-card,
+      .nesh-cc-step { min-width: 0; }
+      .nesh-cc-pill span,
+      .nesh-cc-card p,
+      .nesh-cc-card li,
+      .nesh-cc-step p {
+        font-size: 14px;
+        overflow-wrap: anywhere;
+      }
+    }
+  </style>
+
+  <div class="nesh-cc-wrap">
+    <div class="nesh-cc-hero">
+      <div>
+        <p class="nesh-cc-kicker">D&S catalytic converter rebuilds</p>
+        <h1 class="nesh-cc-title" id="nesh-cc-title">Rebuilt catalytic converters for Bandit, Morbark, and Vermeer wood chippers</h1>
+        <p class="nesh-cc-subtitle">Send in your existing D&S converter core. New England Supply House inspects it, rebuilds damaged internal components, and returns the unit ready for installation on compatible equipment.</p>
+        <div class="nesh-cc-actions">
+          <a class="nesh-cc-button" href="/products/replacement-catalytic-converter-bandit-vermeer-morbark">Order the rebuild</a>
+          <a class="nesh-cc-button secondary" href="tel:17747016374">Call 774-701-6374</a>
+        </div>
+        <div class="nesh-cc-trust" aria-label="Key details">
+          <div class="nesh-cc-pill"><strong>$1,750 rebuild</strong><span>Compared with the $4,439.87 regular-price reference shown on the product page.</span></div>
+          <div class="nesh-cc-pill"><strong>1-2 week typical turnaround</strong><span>After your converter core is received. Expedited service may be available.</span></div>
+          <div class="nesh-cc-pill"><strong>Built for tree care</strong><span>For tree crews, chipper repair shops, land clearing contractors, and equipment fleets.</span></div>
+        </div>
+      </div>
+      <aside class="nesh-cc-product" aria-label="Catalytic converter rebuild product">
+        <div class="nesh-cc-product-image">
+          <div class="nesh-cc-converter" aria-hidden="true"><div class="nesh-cc-converter-body"></div></div>
+        </div>
+        <div class="nesh-cc-product-copy">
+          <div class="nesh-cc-price"><strong>$1,750</strong><span>$4,439.87</span></div>
+          <p>Available rebuild selections: D&S Bandit, D&S Morbark, and D&S Vermeer.</p>
+        </div>
+      </aside>
+    </div>
+
+    <section class="nesh-cc-section">
+      <h2>Why rebuild instead of waiting on a new assembly?</h2>
+      <div class="nesh-cc-grid">
+        <article class="nesh-cc-card"><h3>Lower replacement cost</h3><p>A rebuild can help avoid new-part pricing when the converter shell is reusable and the internal components can be restored.</p></article>
+        <article class="nesh-cc-card"><h3>Less downtime pressure</h3><p>Tree service and land-clearing crews depend on working chippers. A rebuild gives you a practical path when sourcing new components slows the repair.</p></article>
+        <article class="nesh-cc-card"><h3>Handled by a parts supplier</h3><p>New England Supply House supports equipment owners and repair shops with parts sourcing, rebuild coordination, and order support.</p></article>
+      </div>
+    </section>
+
+    <section class="nesh-cc-section">
+      <h2>How the rebuild works</h2>
+      <div class="nesh-cc-steps">
+        <article class="nesh-cc-step"><h3>Order online</h3><p>Choose the D&S Bandit, Morbark, or Vermeer rebuild option.</p></article>
+        <article class="nesh-cc-step"><h3>Send your core</h3><p>New England Supply House sends instructions for shipping your existing converter.</p></article>
+        <article class="nesh-cc-step"><h3>Inspection and rebuild</h3><p>The unit is inspected and damaged internal components are rebuilt.</p></article>
+        <article class="nesh-cc-step"><h3>Return and install</h3><p>Your rebuilt converter is returned for installation on compatible equipment.</p></article>
+      </div>
+    </section>
+
+    <section class="nesh-cc-section">
+      <div class="nesh-cc-grid">
+        <article class="nesh-cc-card"><h3>Available options</h3><ul><li>D&S Bandit rebuild</li><li>D&S Morbark rebuild</li><li>D&S Vermeer rebuild</li></ul></article>
+        <article class="nesh-cc-card"><h3>Good fit for</h3><ul><li>Tree service companies</li><li>Wood chipper repair shops</li><li>Land clearing contractors</li><li>Equipment fleets</li></ul></article>
+        <article class="nesh-cc-card"><h3>Questions before ordering?</h3><p>Call New England Supply House at <a href="tel:17747016374">774-701-6374</a> or review the product page for current stock and checkout options.</p></article>
+      </div>
+    </section>
+
+    <section class="nesh-cc-section">
+      <div class="nesh-cc-final">
+        <h2>Ready to get your chipper back to work?</h2>
+        <p>Order the rebuild online, then send your existing D&S converter core using the instructions provided after purchase.</p>
+        <div class="nesh-cc-actions">
+          <a class="nesh-cc-button" href="/products/replacement-catalytic-converter-bandit-vermeer-morbark">Order the rebuild</a>
+          <a class="nesh-cc-button secondary" href="tel:17747016374">Call 774-701-6374</a>
+        </div>
+        <div class="nesh-cc-note">Confirm fitment and applicable emissions requirements before ordering. Typical turnaround is 1-2 weeks after your converter core is received.</div>
+      </div>
+    </section>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Converter landing",
+  "settings": [],
+  "presets": [
+    {
+      "name": "Converter landing"
+    }
+  ]
+}
+{% endschema %}
