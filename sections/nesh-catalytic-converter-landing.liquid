@@ -119,8 +119,18 @@
       min-height: 310px;
       display: grid;
       place-items: center;
-      padding: 30px;
+      padding: 18px;
       background: linear-gradient(180deg, #f8fafc 0%, #eef4fb 100%);
+    }
+    .nesh-cc-product-photo {
+      display: block;
+      width: 100%;
+      max-width: 460px;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
     }
     .nesh-cc-converter {
       position: relative;
@@ -167,20 +177,16 @@
       background: #475569;
     }
     .nesh-cc-product-copy { padding: 24px; }
-    .nesh-cc-price {
-      display: flex;
-      align-items: baseline;
-      gap: 12px;
-      margin-bottom: 10px;
+    .nesh-cc-product-copy h2 {
+      margin: 0 0 10px;
+      color: var(--ink);
+      font-size: 24px;
+      line-height: 1.1;
     }
-    .nesh-cc-price strong {
-      color: var(--blue);
-      font-size: 34px;
-      line-height: 1;
-    }
-    .nesh-cc-price span {
+    .nesh-cc-product-copy p {
+      margin: 0;
       color: var(--muted);
-      text-decoration: line-through;
+      font-size: 15px;
     }
     .nesh-cc-savings {
       display: grid;
@@ -345,7 +351,7 @@
       }
       .nesh-cc-product-image {
         min-height: 235px;
-        padding: 20px;
+        padding: 14px;
       }
       .nesh-cc-final { padding: 26px; }
       .nesh-cc-pill,
@@ -382,11 +388,11 @@
       </div>
       <aside class="nesh-cc-product" aria-label="Catalytic converter rebuild product">
         <div class="nesh-cc-product-image">
-          <div class="nesh-cc-converter" aria-hidden="true"><div class="nesh-cc-converter-body"></div></div>
+          <img class="nesh-cc-product-photo" src="https://cdn.shopify.com/s/files/1/0725/0034/7102/files/FullSizeRender_ae7d25d8-df4d-4cba-acd8-2dd4c173f780.jpg?v=1765762910" alt="D&S catalytic converter rebuild parts for Bandit, Vermeer, and Morbark wood chippers" loading="eager">
         </div>
         <div class="nesh-cc-product-copy">
-          <div class="nesh-cc-price"><strong>From $1,150</strong><span>New up to $7,200</span></div>
-          <p>Available rebuild selections: D&S Bandit, D&S Vermeer, and D&S Morbark.</p>
+          <h2>Rebuilt D&S converter cores</h2>
+          <p>Real converter rebuild components for compatible commercial wood chipper equipment.</p>
         </div>
       </aside>
     </div>
