@@ -2,7 +2,9 @@
   "sections": {
     "main": {
       "type": "nesh-catalytic-converter-landing",
-      "settings": {}
+      "settings": {
+        "savings_callout_body": "Step 1:\nSend in your existing converter core.\n\nStep 2:\nWe inspect it, rebuild damaged internal components.\n\nStep 3:\nYou receive your rebuilt converter unit ready for installation."
+      }
     }
   },
   "order": [

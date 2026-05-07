@@ -264,6 +264,9 @@
       color: var(--muted);
       font-size: 15px;
     }
+    .nesh-cc-savings-callout .nesh-cc-callout-body {
+      white-space: pre-line;
+    }
     .nesh-cc-section { padding: 52px 0; }
     .nesh-cc-section h2 {
       margin: 0 0 18px;
@@ -451,7 +454,7 @@
           <small>{{ section.settings.savings_callout_label | escape }}</small>
           <strong>{{ section.settings.savings_callout_amount | escape }}</strong>
           <span>{{ section.settings.savings_callout_heading | escape }}</span>
-          <p>{{ section.settings.savings_callout_body }}</p>
+          <p class="nesh-cc-callout-body">{{ section.settings.savings_callout_body | escape }}</p>
           <p>{{ section.settings.savings_callout_note }}</p>
         </aside>
       </div>
@@ -524,7 +527,7 @@
       "type": "textarea",
       "id": "savings_callout_body",
       "label": "Savings callout body",
-      "default": "Send in your existing D&S converter core. New England Supply House inspects it, rebuilds damaged internal components, and returns the unit ready for installation on compatible equipment."
+      "default": "Step 1:\nSend in your existing converter core.\n\nStep 2:\nWe inspect it, rebuild damaged internal components.\n\nStep 3:\nYou receive your rebuilt converter unit ready for installation."
     },
     {
       "type": "textarea",
