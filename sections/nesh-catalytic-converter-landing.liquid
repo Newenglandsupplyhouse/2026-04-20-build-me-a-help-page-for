@@ -182,6 +182,68 @@
       color: var(--muted);
       text-decoration: line-through;
     }
+    .nesh-cc-savings {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(280px, .92fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+    .nesh-cc-savings-copy {
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+    .nesh-cc-savings-copy p {
+      max-width: 700px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+    .nesh-cc-savings-table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .nesh-cc-savings-table th,
+    .nesh-cc-savings-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+      color: var(--ink);
+      font-size: 15px;
+    }
+    .nesh-cc-savings-table th {
+      background: var(--ink);
+      color: #fff;
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+    .nesh-cc-savings-table tr:last-child td { border-bottom: 0; }
+    .nesh-cc-savings-table strong { color: var(--blue); }
+    .nesh-cc-savings-callout {
+      display: grid;
+      align-content: center;
+      padding: 28px;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      background: var(--warm);
+    }
+    .nesh-cc-savings-callout strong {
+      display: block;
+      color: var(--orange);
+      font-size: clamp(34px, 5vw, 58px);
+      line-height: .95;
+    }
+    .nesh-cc-savings-callout span {
+      margin-top: 10px;
+      color: var(--ink);
+      font-size: 18px;
+      font-weight: 800;
+    }
     .nesh-cc-section { padding: 52px 0; }
     .nesh-cc-section h2 {
       margin: 0 0 18px;
@@ -258,7 +320,8 @@
       .nesh-cc-hero,
       .nesh-cc-grid,
       .nesh-cc-steps,
-      .nesh-cc-trust {
+      .nesh-cc-trust,
+      .nesh-cc-savings {
         grid-template-columns: 1fr;
         gap: 24px;
       }
@@ -291,7 +354,10 @@
       .nesh-cc-pill span,
       .nesh-cc-card p,
       .nesh-cc-card li,
-      .nesh-cc-step p {
+      .nesh-cc-step p,
+      .nesh-cc-savings-copy p,
+      .nesh-cc-savings-table th,
+      .nesh-cc-savings-table td {
         font-size: 14px;
         overflow-wrap: anywhere;
       }
@@ -309,9 +375,9 @@
           <a class="nesh-cc-button secondary" href="tel:17747016374">Call 774-701-6374</a>
         </div>
         <div class="nesh-cc-trust" aria-label="Key details">
-          <div class="nesh-cc-pill"><strong>$1,750 rebuild</strong><span>Compared with the $4,439.87 regular-price reference shown on the product page.</span></div>
+          <div class="nesh-cc-pill"><strong>Save up to $3,700</strong><span>Brand-by-brand savings compared with new replacement converter pricing.</span></div>
           <div class="nesh-cc-pill"><strong>1-2 week typical turnaround</strong><span>After your converter core is received. Expedited service may be available.</span></div>
-          <div class="nesh-cc-pill"><strong>Built for tree care</strong><span>For tree crews, chipper repair shops, land clearing contractors, and equipment fleets.</span></div>
+          <div class="nesh-cc-pill"><strong>OEM-quality rebuild</strong><span>Craftsmanship guaranteed, inspected, rebuilt, and prepared for confident reinstallation.</span></div>
         </div>
       </div>
       <aside class="nesh-cc-product" aria-label="Catalytic converter rebuild product">
@@ -319,11 +385,54 @@
           <div class="nesh-cc-converter" aria-hidden="true"><div class="nesh-cc-converter-body"></div></div>
         </div>
         <div class="nesh-cc-product-copy">
-          <div class="nesh-cc-price"><strong>$1,750</strong><span>$4,439.87</span></div>
-          <p>Available rebuild selections: D&S Bandit, D&S Morbark, and D&S Vermeer.</p>
+          <div class="nesh-cc-price"><strong>From $1,150</strong><span>New up to $7,200</span></div>
+          <p>Available rebuild selections: D&S Bandit, D&S Vermeer, and D&S Morbark.</p>
         </div>
       </aside>
     </div>
+
+    <section class="nesh-cc-section">
+      <div class="nesh-cc-savings">
+        <div class="nesh-cc-savings-copy">
+          <h2>Compare rebuild savings by brand</h2>
+          <p>Choose the rebuild option that matches your D&S converter core and compare it against new replacement pricing. The result is a clear savings case before you spend money on a brand-new assembly.</p>
+          <table class="nesh-cc-savings-table" aria-label="Rebuild savings comparison by brand">
+            <thead>
+              <tr>
+                <th>Brand</th>
+                <th>New price</th>
+                <th>Rebuild price</th>
+                <th>Savings</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Bandit</td>
+                <td>$2,350</td>
+                <td>$1,750</td>
+                <td><strong>$600</strong></td>
+              </tr>
+              <tr>
+                <td>Vermeer</td>
+                <td>$2,550</td>
+                <td>$1,150</td>
+                <td><strong>$1,400</strong></td>
+              </tr>
+              <tr>
+                <td>Morbark</td>
+                <td>$7,200</td>
+                <td>$3,500</td>
+                <td><strong>$3,700</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <aside class="nesh-cc-savings-callout" aria-label="Maximum savings">
+          <strong>$3,700</strong>
+          <span>Maximum listed savings versus new replacement pricing</span>
+        </aside>
+      </div>
+    </section>
 
     <section class="nesh-cc-section">
       <h2>Why rebuild instead of waiting on a new assembly?</h2>
