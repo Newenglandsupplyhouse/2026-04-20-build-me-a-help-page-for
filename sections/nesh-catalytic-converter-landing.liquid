@@ -20,26 +20,6 @@
     .nesh-cc-page h3,
     .nesh-cc-page p,
     .nesh-cc-page li { white-space: normal; }
-    body.nesh-cc-landing-active .header__inline-menu .list-menu--inline {
-      flex-wrap: wrap;
-      justify-content: center;
-      column-gap: 2px;
-      row-gap: 0;
-    }
-    body.nesh-cc-landing-active .header__inline-menu .header__menu-item {
-      padding-left: 10px;
-      padding-right: 10px;
-      white-space: nowrap;
-    }
-    body.nesh-cc-landing-active .gm-menu-160986 {
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    body.nesh-cc-landing-active .gm-menu-160986 > .gm-level-0 > .gm-target {
-      padding-left: 12px;
-      padding-right: 12px;
-      white-space: nowrap;
-    }
     .nesh-cc-wrap {
       width: 100%;
       max-width: 1180px;
@@ -519,54 +499,6 @@
       </div>
     </section>
   </div>
-  <script>
-    (() => {
-      document.body.classList.add('nesh-cc-landing-active');
-
-      const hideHvacBanner = () => {
-        document
-          .querySelectorAll('ai-hero-banner-atxrgagnomlb0wk1onaigenblock3861a9fzdmavh, .ai-hero-banner-atxrgagnomlb0wk1onaigenblock3861a9fzdmavh')
-          .forEach((banner) => {
-            banner.style.display = 'none';
-            banner.setAttribute('aria-hidden', 'true');
-          });
-      };
-
-      const topLevelLinks = [
-        ['HVAC Parts', '/collections/hvac-parts-accessories'],
-        ['Metavic Parts', '/collections/metavic-log-loader-parts-accessories'],
-        ['Front Projection Lamps', '/collections/front-projection-lamps'],
-        ['Catalytic Converters', '/pages/catalytic-converter-rebuilds-installations'],
-        ['AI HVAC Parts Assistant (Beta)', '/pages/parts-finder']
-      ];
-
-      const ensureTopLevelMenuLinks = () => {
-        const menu = document.querySelector('.gm-menu-160986');
-        if (!menu) return;
-
-        topLevelLinks.forEach(([title, href]) => {
-          if (menu.querySelector(`:scope > .gm-level-0 > .gm-target[href="${href}"]`)) return;
-
-          const item = document.createElement('li');
-          item.className = 'gm-item gm-level-0 nesh-cc-menu-injected';
-          item.innerHTML = `<a class="gm-target" title="${title}" href="${href}"><span class="gm-text">${title}</span></a>`;
-          menu.appendChild(item);
-        });
-      };
-
-      hideHvacBanner();
-      ensureTopLevelMenuLinks();
-      document.addEventListener('DOMContentLoaded', hideHvacBanner);
-      document.addEventListener('DOMContentLoaded', ensureTopLevelMenuLinks);
-      window.addEventListener('load', hideHvacBanner);
-      window.addEventListener('load', ensureTopLevelMenuLinks);
-
-      new MutationObserver(ensureTopLevelMenuLinks).observe(document.documentElement, {
-        childList: true,
-        subtree: true
-      });
-    })();
-  </script>
 </section>
 
 {% schema %}
