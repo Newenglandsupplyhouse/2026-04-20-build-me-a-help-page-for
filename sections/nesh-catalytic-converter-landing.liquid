@@ -1,9 +1,5 @@
 <section class="nesh-cc-page" aria-labelledby="nesh-cc-title">
   <style>
-    body:has(.nesh-cc-page) ai-hero-banner-atxrgagnomlb0wk1onaigenblock3861a9fzdmavh,
-    body:has(.nesh-cc-page) .ai-hero-banner-atxrgagnomlb0wk1onaigenblock3861a9fzdmavh {
-      display: none !important;
-    }
     .nesh-cc-page {
       --ink: #14213d;
       --muted: #475569;
@@ -24,6 +20,17 @@
     .nesh-cc-page h3,
     .nesh-cc-page p,
     .nesh-cc-page li { white-space: normal; }
+    body.nesh-cc-landing-active .header__inline-menu .list-menu--inline {
+      flex-wrap: wrap;
+      justify-content: center;
+      column-gap: 2px;
+      row-gap: 0;
+    }
+    body.nesh-cc-landing-active .header__inline-menu .header__menu-item {
+      padding-left: 10px;
+      padding-right: 10px;
+      white-space: nowrap;
+    }
     .nesh-cc-wrap {
       width: 100%;
       max-width: 1180px;
@@ -503,6 +510,24 @@
       </div>
     </section>
   </div>
+  <script>
+    (() => {
+      document.body.classList.add('nesh-cc-landing-active');
+
+      const hideHvacBanner = () => {
+        document
+          .querySelectorAll('ai-hero-banner-atxrgagnomlb0wk1onaigenblock3861a9fzdmavh, .ai-hero-banner-atxrgagnomlb0wk1onaigenblock3861a9fzdmavh')
+          .forEach((banner) => {
+            banner.style.display = 'none';
+            banner.setAttribute('aria-hidden', 'true');
+          });
+      };
+
+      hideHvacBanner();
+      document.addEventListener('DOMContentLoaded', hideHvacBanner);
+      window.addEventListener('load', hideHvacBanner);
+    })();
+  </script>
 </section>
 
 {% schema %}
