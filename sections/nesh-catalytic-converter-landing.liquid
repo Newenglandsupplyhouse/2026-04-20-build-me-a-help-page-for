@@ -448,11 +448,11 @@
           </table>
         </div>
         <aside class="nesh-cc-savings-callout" aria-label="Maximum savings">
-          <small>Largest listed savings</small>
-          <strong>$3,700</strong>
-          <span>Morbark rebuild comparison</span>
-          <p>$7,200 new replacement pricing compared with a $3,500 rebuild.</p>
-          <p>See the brand-by-brand savings table for Bandit, Vermeer, and Morbark.</p>
+          <small>{{ section.settings.savings_callout_label | escape }}</small>
+          <strong>{{ section.settings.savings_callout_amount | escape }}</strong>
+          <span>{{ section.settings.savings_callout_heading | escape }}</span>
+          <p>{{ section.settings.savings_callout_body }}</p>
+          <p>{{ section.settings.savings_callout_note }}</p>
         </aside>
       </div>
     </section>
@@ -501,7 +501,38 @@
 {% schema %}
 {
   "name": "Converter landing",
-  "settings": [],
+  "settings": [
+    {
+      "type": "text",
+      "id": "savings_callout_label",
+      "label": "Savings callout label",
+      "default": "Largest listed savings"
+    },
+    {
+      "type": "text",
+      "id": "savings_callout_amount",
+      "label": "Savings callout amount",
+      "default": "$3,700"
+    },
+    {
+      "type": "text",
+      "id": "savings_callout_heading",
+      "label": "Savings callout heading",
+      "default": "Morbark rebuild comparison"
+    },
+    {
+      "type": "textarea",
+      "id": "savings_callout_body",
+      "label": "Savings callout body",
+      "default": "Send in your existing D&S converter core. New England Supply House inspects it, rebuilds damaged internal components, and returns the unit ready for installation on compatible equipment."
+    },
+    {
+      "type": "textarea",
+      "id": "savings_callout_note",
+      "label": "Savings callout note",
+      "default": "See the brand-by-brand savings table for Bandit, Vermeer, and Morbark."
+    }
+  ],
   "presets": [
     {
       "name": "Converter landing"
