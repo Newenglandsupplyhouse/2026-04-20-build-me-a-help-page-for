@@ -1203,6 +1203,16 @@ const server = createServer(async (request, response) => {
   const origin = getAllowedOrigin(request.headers.origin);
   const requestUrl = new URL(request.url || "/", "http://localhost");
 
+  // [nesh-iplog] temporary bot-investigation logging (added 2026-06-17, remove after capture)
+  if (requestUrl.pathname === "/chatbase-help") {
+    console.log("[nesh-iplog] " + JSON.stringify({
+      t: new Date().toISOString(),
+      ip: request.headers["x-forwarded-for"] || request.socket.remoteAddress,
+      ua: request.headers["user-agent"] || "",
+      ref: request.headers["referer"] || ""
+    }));
+  }
+
   if (request.method === "OPTIONS") {
     response.writeHead(204, {
       "Access-Control-Allow-Origin": origin,
