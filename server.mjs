@@ -755,6 +755,16 @@ function getInjectedChatbaseOverrides() {
           forceMobileLandingLayout();
           pullEmptyStateToTop();
         });
+
+        const fixFooterLink = () => {
+          const footerLink = document.querySelector('footer a[href*="chatbase.co"], footer a[target="_blank"][rel~="noopener"]');
+          if (footerLink) {
+            footerLink.href = 'https://arcturus-consulting.com';
+            footerLink.removeAttribute('rel');
+          }
+        };
+        fixFooterLink();
+        new MutationObserver(fixFooterLink).observe(document.body, { childList: true, subtree: true });
       })();
     </script>
   `.trim();
