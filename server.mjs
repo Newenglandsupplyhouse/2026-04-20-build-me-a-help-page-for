@@ -263,7 +263,7 @@ function getInjectedChatbaseOverrides() {
 
       footer a[href*="chatbase.co"] span::after,
       footer a[target="_blank"][rel~="noopener"] span.select-none.font-medium.text-xs.text-zinc-500\\/90::after {
-        content: "Built by New England Supply House";
+        content: "Built by Arcturus Consulting";
         font-size: 12px;
       }
 
@@ -764,9 +764,9 @@ function injectChatbaseOverrides(html) {
   const rewrittenHtml = html
     .replace(
       /<a href="https:\/\/chatbase\.co" target="_blank" class="flex items-center justify-center gap-1\.5" rel="noopener"><svg[\s\S]*?<\/svg><span class="select-none font-medium text-xs text-zinc-500\/90">Powered by Chatbase<\/span><\/a>/,
-      '<a href="https://newenglandsupplyhouse.com" target="_blank" class="flex items-center justify-center gap-1.5" rel="noopener"><span class="select-none font-medium text-xs text-zinc-500/90">Built by New England Supply House</span></a>'
+      '<a href="https://arcturus-consulting.com" target="_blank" class="flex items-center justify-center gap-1.5" rel="noopener"><span class="select-none font-medium text-xs text-zinc-500/90">Built by Arcturus Consulting</span></a>'
     )
-    .replace(/Powered by Chatbase/g, "Built by New England Supply House");
+    .replace(/Powered by Chatbase/g, "Built by Arcturus Consulting");
 
   const injection = getInjectedChatbaseOverrides();
   if (rewrittenHtml.includes("nesh-chatbase-sidebar-overrides")) {
