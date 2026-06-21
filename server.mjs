@@ -49,7 +49,9 @@ function sendJson(response, statusCode, payload, origin = "*") {
 function sendHtml(response, statusCode, html, origin = "*") {
   response.writeHead(statusCode, {
     "Access-Control-Allow-Origin": origin,
-    "Content-Type": "text/html; charset=utf-8"
+    "Content-Type": "text/html; charset=utf-8",
+    "Content-Security-Policy": "frame-ancestors *",
+    "X-Frame-Options": "ALLOWALL"
   });
   response.end(html);
 }
