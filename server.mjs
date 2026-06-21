@@ -209,12 +209,17 @@ function getProxyResponseHeaders(upstreamResponse) {
   const headers = {};
 
   for (const [key, value] of upstreamResponse.headers.entries()) {
-    if (["content-length", "content-encoding", "transfer-encoding", "connection"].includes(key.toLowerCase())) {
+    const k = key.toLowerCase();
+    if (["content-length", "content-encoding", "transfer-encoding", "connection",
+         "x-frame-options", "content-security-policy", "content-security-policy-report-only"].includes(k)) {
       continue;
     }
 
     headers[key] = value;
   }
+
+  // Explicitly allow embedding from any origin
+  headers["content-security-policy"] = "frame-ancestors *";
 
   return headers;
 }
