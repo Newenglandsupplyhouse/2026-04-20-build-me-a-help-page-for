@@ -606,51 +606,14 @@ function getInjectedChatbaseOverrides() {
         };
 
         const centerLandingHeadingToInput = () => {
-          const heading = [...document.querySelectorAll('h1')].find((element) =>
-            /How can I help you today\?/i.test(element.textContent || '')
-          );
-          const inputShell =
-            document.querySelector('[data-slot="chatbot-input-box"]')?.closest('.group\\\\/input') ||
-            document.querySelector('textarea[data-slot="chatbot-input-box"]')?.closest('.group\\\\/input');
-          const stage = document.querySelector('main > header + div');
-
-          if (!heading || !inputShell || !stage) {
-            return;
-          }
-
-          const inputRect = inputShell.getBoundingClientRect();
-          const wrap = heading.parentElement;
-          const outerWrap = wrap?.parentElement;
-          const clampedWidth = Math.max(220, Math.round(inputRect.width));
-          const isPortraitMobile = isMobileViewport() && window.innerHeight >= window.innerWidth;
-          const portraitNudge = isPortraitMobile ? 14 : 0;
-
-          if (!wrap) {
-            return;
-          }
-
-          try {
-            if (outerWrap) {
-              outerWrap.style.setProperty('display', 'flex', 'important');
-              outerWrap.style.setProperty('justify-content', 'center', 'important');
-              outerWrap.style.setProperty('width', '100%', 'important');
-              outerWrap.style.setProperty('max-width', 'none', 'important');
-            }
-
-            wrap.style.setProperty('display', 'block', 'important');
-            wrap.style.setProperty('width', clampedWidth + 'px', 'important');
-            wrap.style.setProperty('max-width', clampedWidth + 'px', 'important');
-            wrap.style.setProperty('margin-left', 'auto', 'important');
-            wrap.style.setProperty('margin-right', 'auto', 'important');
-            wrap.style.setProperty('text-align', 'center', 'important');
-            wrap.style.setProperty('transform', portraitNudge ? ('translateX(' + portraitNudge + 'px)') : 'none', 'important');
-
-            heading.style.setProperty('display', 'block', 'important');
-            heading.style.setProperty('width', '100%', 'important');
-            heading.style.setProperty('max-width', 'none', 'important');
-            heading.style.setProperty('margin', '0 auto 12px', 'important');
-            heading.style.setProperty('text-align', 'center', 'important');
-          } catch {}
+          // Intentionally inert (2026-07-05). This function was dead code from
+          // birth: its ".group/input" closest() selector threw a SyntaxError
+          // before any style was ever applied, so the approved page look never
+          // included its overrides. When the selector was fixed (0d61b19) the
+          // styles ran for the first time and set width:100%/max-width:none on
+          // the landing column that also contains the chat input, stretching
+          // the input to full page width. Chatbase's own md:max-w-lg /
+          // lg:max-w-2xl classes are the intended sizing; keep this a no-op.
         };
 
         const syncInputFocusState = (active) => {
