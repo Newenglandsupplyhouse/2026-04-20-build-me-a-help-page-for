@@ -610,8 +610,8 @@ function getInjectedChatbaseOverrides() {
             /How can I help you today\?/i.test(element.textContent || '')
           );
           const inputShell =
-            document.querySelector('[data-slot="chatbot-input-box"]')?.closest('.group\\/input') ||
-            document.querySelector('textarea[data-slot="chatbot-input-box"]')?.closest('.group\\/input');
+            document.querySelector('[data-slot="chatbot-input-box"]')?.closest('.group\\\\/input') ||
+            document.querySelector('textarea[data-slot="chatbot-input-box"]')?.closest('.group\\\\/input');
           const stage = document.querySelector('main > header + div');
 
           if (!heading || !inputShell || !stage) {
