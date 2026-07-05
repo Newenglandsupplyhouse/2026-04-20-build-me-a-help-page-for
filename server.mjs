@@ -610,8 +610,8 @@ function getInjectedChatbaseOverrides() {
             /How can I help you today\?/i.test(element.textContent || '')
           );
           const inputShell =
-            document.querySelector('[data-slot="chatbot-input-box"]')?.closest('.group/input') ||
-            document.querySelector('textarea[data-slot="chatbot-input-box"]')?.closest('.group/input');
+            document.querySelector('[data-slot="chatbot-input-box"]')?.closest('.group\\/input') ||
+            document.querySelector('textarea[data-slot="chatbot-input-box"]')?.closest('.group\\/input');
           const stage = document.querySelector('main > header + div');
 
           if (!heading || !inputShell || !stage) {
@@ -763,15 +763,41 @@ function getInjectedChatbaseOverrides() {
           pullEmptyStateToTop();
         });
 
+        const ARCTURUS_URL = 'https://arcturus-consulting.com';
+        const isAttributionLink = (a) =>
+          !!a && (/chatbase\.co/i.test(a.getAttribute('href') || a.href || '') ||
+            (!!(a.closest && a.closest('footer')) && /powered by chatbase|built by arcturus/i.test(a.textContent || '')));
         const fixFooterLink = () => {
-          const footerLink = document.querySelector('footer a[href*="chatbase.co"], footer a[target="_blank"][rel~="noopener"]');
-          if (footerLink) {
-            footerLink.href = 'https://arcturus-consulting.com';
-            footerLink.removeAttribute('rel');
-          }
+          // Chatbase renders this footer client-side (React) and can re-render it,
+          // so re-point every attribution link on each mutation.
+          document.querySelectorAll('footer a, a[href*="chatbase.co"]').forEach((a) => {
+            if (!isAttributionLink(a)) return;
+            if (a.getAttribute('href') !== ARCTURUS_URL) a.setAttribute('href', ARCTURUS_URL);
+            a.setAttribute('target', '_blank');
+            // Keep rel containing "noopener" so the injected ::after label still matches.
+            a.setAttribute('rel', 'noopener noreferrer');
+          });
         };
-        fixFooterLink();
-        new MutationObserver(fixFooterLink).observe(document.body, { childList: true, subtree: true });
+        const startFooterFix = () => {
+          fixFooterLink();
+          // Observe documentElement — document.body may not exist yet during head parse.
+          new MutationObserver(fixFooterLink).observe(document.documentElement, { childList: true, subtree: true });
+        };
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', startFooterFix, { once: true });
+        } else {
+          startFooterFix();
+        }
+        // Safety net: guarantee the destination even if React re-renders a stale
+        // href in the moment between a mutation and the click.
+        document.addEventListener('click', (event) => {
+          const target = event.target;
+          const link = target && target.closest ? target.closest('a') : null;
+          if (link && isAttributionLink(link)) {
+            event.preventDefault();
+            window.open(ARCTURUS_URL, '_blank', 'noopener');
+          }
+        }, true);
       })();
     </script>
   `.trim();
