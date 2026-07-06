@@ -8,261 +8,495 @@
     :root {
       --bg: #08080b; --panel: #111117; --panel-2: #16161d; --border: #26262f;
       --text: #f5f5f7; --muted: #a6a8b3; --accent: #4f7cff; --green: #35d07f; --red: #e5534b;
+      --sidebar-w: 216px;
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
-    .wrap { max-width: 860px; margin: 0 auto; padding: 28px 18px 80px; }
-    h1 { font-size: 20px; margin: 0 0 4px; }
-    .sub { color: var(--muted); font-size: 13px; margin-bottom: 26px; }
-    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 18px; }
-    .card h2 { font-size: 15px; margin: 0 0 4px; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+    body { display: flex; height: 100dvh; overflow: hidden; }
+
+    /* ---------- sidebar ---------- */
+    aside {
+      flex: 0 0 var(--sidebar-w); display: flex; flex-direction: column;
+      border-right: 1px solid var(--border); background: #0b0b0f; padding: 16px 10px;
+    }
+    aside .brand { display: flex; align-items: center; gap: 8px; padding: 4px 10px 16px; font-weight: 650; font-size: 14.5px; }
+    aside .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px #35d07f88; }
+    aside nav { display: flex; flex-direction: column; gap: 2px; }
+    aside nav a {
+      display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 9px;
+      color: var(--muted); text-decoration: none; font-size: 13.5px; transition: background .12s, color .12s;
+    }
+    aside nav a:hover { color: var(--text); background: #14141a; }
+    aside nav a.active { color: var(--text); background: var(--panel-2); }
+    aside .foot { margin-top: auto; padding: 10px 12px; font-size: 11.5px; color: #55565f; line-height: 1.7; }
+    aside .foot a { color: #7f818c; text-decoration: none; }
+    aside .foot a:hover { color: var(--text); }
+
+    /* ---------- content ---------- */
+    main { flex: 1 1 auto; overflow-y: auto; padding: 26px 28px 60px; }
+    section { display: none; max-width: 1100px; }
+    section.active { display: block; }
+    h1 { font-size: 19px; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+    .card h2 { font-size: 14.5px; margin: 0 0 4px; }
     .card .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; line-height: 1.5; }
     label { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 5px; }
-    input[type=text], input[type=number], textarea, select {
+    input[type=text], input[type=number], input[type=date], textarea, select {
       width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
       border-radius: 9px; padding: 9px 11px; font-size: 13.5px; font-family: inherit;
     }
     textarea { resize: vertical; line-height: 1.5; }
-    textarea:focus, input:focus, select:focus { outline: none; border-color: #3a4a7a; }
+    textarea:focus, input:focus { outline: none; border-color: #3a4a7a; }
     #instructions { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
-    .row { display: flex; gap: 10px; }
-    .row > * { flex: 1; }
-    .chip-row { display: grid; grid-template-columns: 1.2fr 1fr 1.6fr; gap: 8px; margin-bottom: 8px; }
-    button.primary {
-      background: var(--accent); color: #fff; border: 0; border-radius: 9px;
-      padding: 10px 18px; font-size: 13.5px; cursor: pointer; margin-top: 14px;
-    }
+    .row { display: flex; gap: 12px; } .row > * { flex: 1; }
+    button.primary { background: var(--accent); color: #fff; border: 0; border-radius: 9px; padding: 10px 18px; font-size: 13.5px; cursor: pointer; margin-top: 14px; }
     button.primary:hover { background: #3c67e6; }
-    button.small { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 7px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
-    button.small:hover { color: var(--text); }
+    button.small { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 7px; padding: 5px 11px; font-size: 12px; cursor: pointer; }
+    button.small:hover { color: var(--text); border-color: #3a3a46; }
     button.danger { color: var(--red); border-color: #4a2a2a; }
     .toggle { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 13.5px; }
+
+    /* playground */
+    .playground { display: grid; grid-template-columns: minmax(380px, 1fr) minmax(360px, 480px); gap: 16px; align-items: start; }
+    .preview-frame { position: sticky; top: 0; }
+    .preview-frame iframe { width: 100%; height: calc(100dvh - 130px); min-height: 480px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg); }
+    .preview-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
+    @media (max-width: 1020px) { .playground { grid-template-columns: 1fr; } .preview-frame { position: static; } }
+
+    /* activity */
+    .activity { display: grid; grid-template-columns: 330px 1fr; gap: 16px; align-items: start; height: calc(100dvh - 150px); }
+    .convo-list { border: 1px solid var(--border); border-radius: 14px; background: var(--panel); overflow-y: auto; height: 100%; }
+    .convo-item { padding: 12px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+    .convo-item:hover { background: var(--panel-2); }
+    .convo-item.sel { background: var(--panel-2); border-left: 3px solid var(--accent); padding-left: 11px; }
+    .convo-item .t { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .convo-item .m { font-size: 11.5px; color: var(--muted); margin-top: 3px; display: flex; justify-content: space-between; }
+    .transcript { border: 1px solid var(--border); border-radius: 14px; background: var(--panel); overflow-y: auto; height: 100%; padding: 18px; }
+    .transcript .turn { margin-bottom: 18px; }
+    .transcript .q { background: var(--user, #2a2f45); border-radius: 12px 12px 4px 12px; padding: 10px 13px; font-size: 13.5px; margin-left: 15%; margin-bottom: 8px; white-space: pre-wrap; }
+    .transcript .a { background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px 12px 12px 4px; padding: 10px 13px; font-size: 13.5px; margin-right: 8%; white-space: pre-wrap; line-height: 1.55; }
+    .transcript .meta { font-size: 11px; color: #6d6f7a; margin-top: 5px; }
+    .transcript a { color: #8fb0ff; }
+    .activity-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+    .activity-bar input[type=date] { width: auto; }
+
+    /* analytics */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+    @media (max-width: 900px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+    .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+    .stat .k { font-size: 12px; color: var(--muted); }
+    .stat .v { font-size: 26px; font-weight: 650; margin-top: 6px; }
+    .chart { display: flex; align-items: flex-end; gap: 6px; height: 160px; padding: 12px 4px 0; }
+    .chart .bar { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; height: 100%; }
+    .chart .bar i { width: 100%; max-width: 42px; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 2px; display: block; }
+    .chart .bar b { font-size: 10px; color: var(--muted); font-weight: 400; white-space: nowrap; }
+    .chart .bar .n { font-size: 10.5px; color: var(--text); }
+    table.days { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.days th, table.days td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+    table.days th { color: var(--muted); font-weight: 500; font-size: 12px; }
+
+    /* knowledge */
     .kb-file { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; }
     .kb-file:last-child { border-bottom: 0; }
     .kb-file .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .kb-file .meta { color: var(--muted); font-size: 11.5px; flex: 0 0 auto; }
-    .status { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 9px 20px; font-size: 13px; display: none; box-shadow: 0 6px 24px #0009; }
+    .chip-row { display: grid; grid-template-columns: 1.2fr 1fr 1.6fr; gap: 8px; margin-bottom: 8px; }
+
+    .status { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 9px 20px; font-size: 13px; display: none; box-shadow: 0 6px 24px #0009; z-index: 50; }
     .status.ok { color: var(--green); } .status.err { color: var(--red); }
-    a { color: #8fb0ff; text-decoration: none; }
-    .links { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; }
-    .pill { background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 7px 14px; }
+    .empty { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>🔧 Parts Finder — Admin</h1>
-    <div class="sub">Manage the agent's behavior. Changes save to the server instantly — no redeploy needed.</div>
-
-    <div class="card">
-      <h2>Quick links</h2>
-      <div class="links" style="margin-top:10px">
-        <a class="pill" href="/finder?test=1" target="_blank">🧪 Test the agent (not logged)</a>
-        <a class="pill" href="/finder" target="_blank">👁 View live finder</a>
-        <a class="pill" href="https://nesh-crm.onrender.com/api/chat-logs?limit=50" target="_blank">📜 Chat logs (CRM)</a>
-      </div>
-      <p class="hint" style="margin:12px 0 0">Chat transcripts email you daily at 7:00 AM ET (skipped when there were no chats).</p>
+  <aside>
+    <div class="brand"><span class="dot"></span> Parts Finder</div>
+    <nav id="nav">
+      <a href="#playground" data-s="playground">▶ Playground</a>
+      <a href="#activity" data-s="activity">🕘 Activity</a>
+      <a href="#analytics" data-s="analytics">📊 Analytics</a>
+      <a href="#knowledge" data-s="knowledge">🗂 Knowledge</a>
+      <a href="#interface" data-s="interface">💬 Chat Interface</a>
+      <a href="#security" data-s="security">🛡 Security</a>
+    </nav>
+    <div class="foot">
+      <a href="/finder" target="_blank">Live finder ↗</a><br>
+      <a href="https://nesh-crm.onrender.com" target="_blank">NESH CRM ↗</a><br>
+      Daily transcript email at 7am ET
     </div>
+  </aside>
 
-    <div class="card">
-      <h2>Agent instructions (system prompt)</h2>
-      <p class="hint">The agent's personality and rules — ported from your Chatbase "Base Instructions". Edit and save; takes effect on the next customer message.</p>
-      <textarea id="instructions" rows="18"></textarea>
-      <button class="primary" onclick="save({instructions: el('instructions').value})">Save instructions</button>
-    </div>
-
-    <div class="card">
-      <h2>Model &amp; tools</h2>
-      <p class="hint">Chatbase ran GPT-5. gpt-5-mini is ~10× cheaper and handles parts lookups well; switch here anytime if you want maximum answer quality.</p>
-      <div class="row">
+  <main>
+    <!-- ============ PLAYGROUND ============ -->
+    <section id="playground">
+      <h1>Playground</h1>
+      <div class="sub">Tune the agent and try it live. The preview runs the real engine in test mode — chats here aren't logged.</div>
+      <div class="playground">
         <div>
-          <label>OpenAI model</label>
-          <input type="text" id="model" list="models">
-          <datalist id="models">
-            <option value="gpt-5-mini"><option value="gpt-5"><option value="gpt-5-nano"><option value="gpt-4.1-mini">
-          </datalist>
+          <div class="card">
+            <h2>Model &amp; tools</h2>
+            <div class="row">
+              <div>
+                <label>OpenAI model</label>
+                <input type="text" id="model" list="models">
+                <datalist id="models">
+                  <option value="gpt-5-mini"><option value="gpt-5"><option value="gpt-5-nano"><option value="gpt-4.1-mini">
+                </datalist>
+              </div>
+              <div>
+                <label>&nbsp;</label>
+                <div class="toggle"><input type="checkbox" id="enableWebSearch"> <span>Web search fallback</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Instructions (system prompt)</h2>
+            <p class="hint">Ported from your Chatbase "Base Instructions". Saves apply to the next message — test in the preview →</p>
+            <textarea id="instructions" rows="22"></textarea>
+          </div>
+          <button class="primary" onclick="savePlayground()">Save to agent</button>
         </div>
-        <div>
-          <label>&nbsp;</label>
-          <div class="toggle"><input type="checkbox" id="enableWebSearch"> <span>Web search fallback (manufacturer sites)</span></div>
-        </div>
-      </div>
-      <button class="primary" onclick="save({model: el('model').value, enableWebSearch: el('enableWebSearch').checked})">Save model &amp; tools</button>
-    </div>
-
-    <div class="card">
-      <h2>Chat interface</h2>
-      <p class="hint">What customers see before they type. Chips are the clickable question suggestions.</p>
-      <label>Heading</label>
-      <input type="text" id="welcomeHeading">
-      <label>Welcome text</label>
-      <textarea id="welcomeText" rows="3"></textarea>
-      <label>Input placeholder</label>
-      <input type="text" id="placeholder">
-      <label>Suggestion chips (label · subtitle · question it sends)</label>
-      <div id="chips"></div>
-      <button class="small" onclick="addChip()">+ Add chip</button>
-      <br>
-      <button class="primary" onclick="saveInterface()">Save chat interface</button>
-    </div>
-
-    <div class="card">
-      <h2>Knowledge base (manuals)</h2>
-      <p class="hint">The documents the agent searches — your OpenAI vector store. PDFs work best when their text is selectable. Large libraries take ~30s to list.</p>
-      <input type="text" id="kb-filter" placeholder="Filter files by name…" oninput="filterKb()" style="margin-bottom:10px">
-      <div id="kb-list" style="margin-bottom:10px; max-height: 420px; overflow-y: auto;">Loading…</div>
-      <input type="file" id="kb-upload" accept=".pdf,.txt,.docx,.md" style="display:none" onchange="uploadKb(this.files[0])">
-      <button class="small" onclick="el('kb-upload').click()">⬆ Upload document</button>
-      <span id="kb-usage" class="meta" style="color:var(--muted);font-size:12px;margin-left:10px"></span>
-    </div>
-
-    <div class="card">
-      <h2>Abuse protection</h2>
-      <p class="hint">This page was bot-scraped in the past — these caps keep a bot from burning OpenAI credits. Normal customers never hit them.</p>
-      <div class="row">
-        <div>
-          <label>Max messages per visitor per minute</label>
-          <input type="number" id="rateLimitPerMin" min="1" max="60">
-        </div>
-        <div>
-          <label>Max total messages per day</label>
-          <input type="number" id="dailyCap" min="10" max="100000">
+        <div class="preview-frame">
+          <div class="preview-bar">
+            <span>Live preview (test mode)</span>
+            <button class="small" onclick="document.getElementById('preview').src='/finder?test=1&r='+Date.now()">↻ Reload preview</button>
+          </div>
+          <iframe id="preview" src="/finder?test=1"></iframe>
         </div>
       </div>
-      <button class="primary" onclick="save({rateLimitPerMin: +el('rateLimitPerMin').value, dailyCap: +el('dailyCap').value})">Save limits</button>
-    </div>
-  </div>
+    </section>
+
+    <!-- ============ ACTIVITY ============ -->
+    <section id="activity">
+      <h1>Chat logs</h1>
+      <div class="sub">Every customer conversation, straight from the CRM. Test-mode chats are excluded.</div>
+      <div class="activity-bar">
+        <input type="date" id="log-day">
+        <button class="small" onclick="loadLogs(true)">Filter day</button>
+        <button class="small" onclick="document.getElementById('log-day').value='';loadLogs(true)">All recent</button>
+        <button class="small" onclick="loadLogs(true)">↻ Refresh</button>
+      </div>
+      <div class="activity">
+        <div class="convo-list" id="convo-list"><div class="empty">Loading…</div></div>
+        <div class="transcript" id="transcript"><div class="empty">Select a conversation</div></div>
+      </div>
+    </section>
+
+    <!-- ============ ANALYTICS ============ -->
+    <section id="analytics">
+      <h1>Analytics</h1>
+      <div class="sub">Live counts from your own data — no plan gates.</div>
+      <div class="stats">
+        <div class="stat"><div class="k">Conversations (7 days)</div><div class="v" id="st-c7">–</div></div>
+        <div class="stat"><div class="k">Messages (7 days)</div><div class="v" id="st-m7">–</div></div>
+        <div class="stat"><div class="k">Conversations (30 days)</div><div class="v" id="st-c30">–</div></div>
+        <div class="stat"><div class="k">Messages (all time)</div><div class="v" id="st-all">–</div></div>
+      </div>
+      <div class="card">
+        <h2>Messages per day — last 14 days</h2>
+        <div class="chart" id="chart"></div>
+      </div>
+      <div class="card">
+        <h2>By day</h2>
+        <table class="days"><thead><tr><th>Day</th><th>Conversations</th><th>Messages</th></tr></thead><tbody id="days-body"></tbody></table>
+      </div>
+    </section>
+
+    <!-- ============ KNOWLEDGE ============ -->
+    <section id="knowledge">
+      <h1>Knowledge base</h1>
+      <div class="sub">The manuals the agent searches — your own OpenAI vector store. No 20&nbsp;MB cap here.</div>
+      <div class="card">
+        <h2>Add a quick note</h2>
+        <p class="hint">Text the agent should know — a policy, a cross-reference, a correction. Saved as a document in the knowledge base.</p>
+        <input type="text" id="snip-title" placeholder="Title, e.g. capacitor-strap-brackets">
+        <textarea id="snip-body" rows="4" placeholder="e.g. We stock universal round-capacitor strap brackets for 1.75–2.0 inch cans; SKU UB-STRAP-2, $6.95."></textarea>
+        <button class="primary" onclick="addSnippet()">Add to knowledge base</button>
+      </div>
+      <div class="card">
+        <h2>Documents <span id="kb-usage" style="color:var(--muted);font-size:12px;font-weight:400;margin-left:8px"></span></h2>
+        <p class="hint">Large libraries take ~30s to list. PDFs work best when their text is selectable.</p>
+        <input type="text" id="kb-filter" placeholder="Filter files by name…" oninput="filterKb()" style="margin-bottom:10px">
+        <div id="kb-list" style="margin-bottom:10px; max-height: 420px; overflow-y: auto;">Loading…</div>
+        <input type="file" id="kb-upload" accept=".pdf,.txt,.docx,.md" style="display:none" onchange="uploadKb(this.files[0])">
+        <button class="small" onclick="el('kb-upload').click()">⬆ Upload document</button>
+      </div>
+    </section>
+
+    <!-- ============ INTERFACE ============ -->
+    <section id="interface">
+      <h1>Chat interface</h1>
+      <div class="sub">What customers see on the finder page before they type.</div>
+      <div class="card">
+        <label>Heading</label>
+        <input type="text" id="welcomeHeading">
+        <label>Welcome text</label>
+        <textarea id="welcomeText" rows="3"></textarea>
+        <label>Input placeholder</label>
+        <input type="text" id="placeholder">
+        <label>Suggestion chips (label · subtitle · question it sends)</label>
+        <div id="chips"></div>
+        <button class="small" onclick="addChip()">+ Add chip</button>
+        <br>
+        <button class="primary" onclick="saveInterface()">Save chat interface</button>
+      </div>
+    </section>
+
+    <!-- ============ SECURITY ============ -->
+    <section id="security">
+      <h1>Security</h1>
+      <div class="sub">Abuse protection — this page was bot-scraped once. Normal customers never hit these caps. (Chatbase's setting was 20 messages per 240s.)</div>
+      <div class="card">
+        <div class="row">
+          <div>
+            <label>Max messages per visitor per minute</label>
+            <input type="number" id="rateLimitPerMin" min="0" max="60">
+          </div>
+          <div>
+            <label>Max total messages per day (0 = pause the finder)</label>
+            <input type="number" id="dailyCap" min="0" max="100000">
+          </div>
+        </div>
+        <button class="primary" onclick="save({rateLimitPerMin: +el('rateLimitPerMin').value, dailyCap: +el('dailyCap').value})">Save limits</button>
+      </div>
+    </section>
+  </main>
 
   <div class="status" id="status"></div>
 
   <script>
     "use strict";
     const el = (id) => document.getElementById(id);
-    let cfg = null;
+    let cfg = null, logsCache = null;
+
+    /* ---------- routing ---------- */
+    function route() {
+      const s = (location.hash || "#playground").slice(1);
+      document.querySelectorAll("section").forEach((x) => x.classList.toggle("active", x.id === s));
+      document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.s === s));
+      if ((s === "activity" || s === "analytics") && !logsCache) loadLogs();
+      if (s === "knowledge" && !loadKb.done) { loadKb.done = true; loadKb(); }
+    }
+    window.addEventListener("hashchange", route);
 
     function flash(msg, ok = true) {
-      const s = el('status');
-      s.textContent = msg; s.className = 'status ' + (ok ? 'ok' : 'err'); s.style.display = 'block';
-      clearTimeout(flash._t); flash._t = setTimeout(() => s.style.display = 'none', 2600);
+      const st = el("status");
+      st.textContent = msg; st.className = "status " + (ok ? "ok" : "err"); st.style.display = "block";
+      clearTimeout(flash._t); flash._t = setTimeout(() => st.style.display = "none", 2600);
     }
+    function esc(s) { return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
-    async function load() {
-      const r = await fetch('/admin/api/config');
-      cfg = await r.json();
-      el('instructions').value = cfg.instructions || '';
-      el('model').value = cfg.model || '';
-      el('enableWebSearch').checked = !!cfg.enableWebSearch;
-      el('welcomeHeading').value = cfg.welcomeHeading || '';
-      el('welcomeText').value = cfg.welcomeText || '';
-      el('placeholder').value = cfg.placeholder || '';
-      el('rateLimitPerMin').value = cfg.rateLimitPerMin || 8;
-      el('dailyCap').value = cfg.dailyCap || 400;
+    /* ---------- config ---------- */
+    async function loadCfg() {
+      cfg = await fetch("/admin/api/config").then((r) => r.json());
+      el("instructions").value = cfg.instructions || "";
+      el("model").value = cfg.model || "";
+      el("enableWebSearch").checked = !!cfg.enableWebSearch;
+      el("welcomeHeading").value = cfg.welcomeHeading || "";
+      el("welcomeText").value = cfg.welcomeText || "";
+      el("placeholder").value = cfg.placeholder || "";
+      el("rateLimitPerMin").value = cfg.rateLimitPerMin ?? 8;
+      el("dailyCap").value = cfg.dailyCap ?? 400;
       renderChips(cfg.chips || []);
-      loadKb();
     }
-
-    function renderChips(chips) {
-      el('chips').innerHTML = '';
-      chips.forEach((c, i) => {
-        const row = document.createElement('div');
-        row.className = 'chip-row';
-        row.innerHTML = `
-          <input type="text" placeholder="Label" value="${escAttr(c.label)}" data-k="label">
-          <input type="text" placeholder="Subtitle" value="${escAttr(c.sub)}" data-k="sub">
-          <div style="display:flex;gap:6px">
-            <input type="text" placeholder="Question it sends" value="${escAttr(c.q)}" data-k="q" style="flex:1">
-            <button class="small danger" onclick="this.closest('.chip-row').remove()">✕</button>
-          </div>`;
-        el('chips').appendChild(row);
-      });
-    }
-    function escAttr(s) { return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
-    function addChip() { renderChipsAppend(); }
-    function renderChipsAppend() {
-      const chips = readChips(); chips.push({label:'',sub:'',q:''}); renderChips(chips);
-    }
-    function readChips() {
-      return [...document.querySelectorAll('.chip-row')].map(row => {
-        const g = (k) => row.querySelector(`[data-k=${k}]`).value.trim();
-        return { label: g('label'), sub: g('sub'), q: g('q') };
-      }).filter(c => c.label && c.q);
-    }
-    function saveInterface() {
-      save({
-        welcomeHeading: el('welcomeHeading').value,
-        welcomeText: el('welcomeText').value,
-        placeholder: el('placeholder').value,
-        chips: readChips(),
-      });
-    }
-
     async function save(partial) {
       try {
-        const r = await fetch('/admin/api/config', {
-          method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(partial)
-        });
+        const r = await fetch("/admin/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(partial) });
         if (!r.ok) throw new Error((await r.json()).error || r.status);
         cfg = await r.json();
-        flash('Saved ✓');
-      } catch (e) { flash('Save failed: ' + e.message, false); }
+        flash("Saved ✓");
+      } catch (e) { flash("Save failed: " + e.message, false); }
+    }
+    function savePlayground() {
+      save({ instructions: el("instructions").value, model: el("model").value, enableWebSearch: el("enableWebSearch").checked });
     }
 
-    // ---- knowledge base ----
-    function fmtSize(b) { return b > 1048576 ? (b/1048576).toFixed(1)+' MB' : Math.round(b/1024)+' KB'; }
+    /* ---------- interface chips ---------- */
+    function renderChips(chips) {
+      el("chips").innerHTML = "";
+      chips.forEach((c) => {
+        const row = document.createElement("div");
+        row.className = "chip-row";
+        row.innerHTML = `
+          <input type="text" placeholder="Label" value="${esc(c.label)}" data-k="label">
+          <input type="text" placeholder="Subtitle" value="${esc(c.sub)}" data-k="sub">
+          <div style="display:flex;gap:6px">
+            <input type="text" placeholder="Question it sends" value="${esc(c.q)}" data-k="q" style="flex:1">
+            <button class="small danger" onclick="this.closest('.chip-row').remove()">✕</button>
+          </div>`;
+        el("chips").appendChild(row);
+      });
+    }
+    function readChips() {
+      return [...document.querySelectorAll(".chip-row")].map((row) => {
+        const g = (k) => row.querySelector(`[data-k=${k}]`).value.trim();
+        return { label: g("label"), sub: g("sub"), q: g("q") };
+      }).filter((c) => c.label && c.q);
+    }
+    function addChip() { const c = readChips(); c.push({ label: "", sub: "", q: "" }); renderChips(c); }
+    function saveInterface() {
+      save({ welcomeHeading: el("welcomeHeading").value, welcomeText: el("welcomeText").value, placeholder: el("placeholder").value, chips: readChips() });
+    }
+
+    /* ---------- activity + analytics ---------- */
+    function ago(ts) {
+      const s = (Date.now() - new Date(ts + (ts.includes("Z") || ts.includes("+") ? "" : "Z")).getTime()) / 1000;
+      if (!isFinite(s)) return ts;
+      if (s < 3600) return Math.max(1, Math.round(s / 60)) + " min ago";
+      if (s < 86400) return Math.round(s / 3600) + " hours ago";
+      return Math.round(s / 86400) + " days ago";
+    }
+    async function loadLogs(force) {
+      if (force) logsCache = null;
+      el("convo-list").innerHTML = '<div class="empty">Loading…</div>';
+      try {
+        const day = el("log-day").value;
+        const r = await fetch("/admin/api/logs?limit=400" + (day ? "&day=" + day : ""));
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        logsCache = d;
+        renderConvos(); renderAnalytics();
+      } catch (e) {
+        el("convo-list").innerHTML = `<div class="empty">Couldn't load logs: ${esc(e.message)}</div>`;
+      }
+    }
+    function groupConvos() {
+      const by = new Map();
+      for (const row of (logsCache?.rows || [])) {
+        const k = row.session_id || "row-" + row.id;
+        if (!by.has(k)) by.set(k, []);
+        by.get(k).push(row);
+      }
+      // rows arrive newest-first; order turns oldest-first inside each conversation
+      return [...by.values()].map((turns) => turns.slice().reverse());
+    }
+    function renderConvos() {
+      const convos = groupConvos();
+      const list = el("convo-list");
+      list.innerHTML = convos.length ? "" : '<div class="empty">No chats yet — they\'ll appear as soon as customers use the finder.</div>';
+      convos.forEach((turns, i) => {
+        const item = document.createElement("div");
+        item.className = "convo-item";
+        item.innerHTML = `<div class="t">${esc(turns[0].question.slice(0, 70))}</div>
+          <div class="m"><span>${turns.length} message${turns.length === 1 ? "" : "s"}</span><span>${ago(turns[turns.length - 1].ts)}</span></div>`;
+        item.onclick = () => {
+          document.querySelectorAll(".convo-item").forEach((x) => x.classList.remove("sel"));
+          item.classList.add("sel");
+          renderTranscript(turns);
+        };
+        list.appendChild(item);
+        if (i === 0) { item.classList.add("sel"); renderTranscript(turns); }
+      });
+    }
+    function linkify(s) {
+      return esc(s).replace(/(https?:\/\/[^\s<)]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+    }
+    function renderTranscript(turns) {
+      const t = el("transcript");
+      t.innerHTML = "";
+      turns.forEach((row) => {
+        let docs = [];
+        try { docs = JSON.parse(row.documents || "[]"); } catch {}
+        const docLine = docs.filter((d) => d.filename || d.url)
+          .map((d) => d.url ? `<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.filename || d.url)}</a>` : esc(d.filename)).join(" · ");
+        const div = document.createElement("div");
+        div.className = "turn";
+        div.innerHTML = `<div class="q">${linkify(row.question)}</div>
+          <div class="a">${linkify(row.answer)}</div>
+          <div class="meta">${esc(row.ts)}${row.used_tools ? " · " + esc(row.used_tools) : ""}${docLine ? " · 📄 " + docLine : ""}</div>`;
+        t.appendChild(div);
+      });
+      t.scrollTop = 0;
+    }
+    function renderAnalytics() {
+      const byDay = (logsCache?.byDay || []).slice().reverse(); // oldest→newest
+      const today = new Date();
+      const series = [];
+      for (let i = 13; i >= 0; i--) {
+        const d = new Date(today.getTime() - i * 864e5);
+        const key = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+        const hit = byDay.find((x) => x.day === key);
+        series.push({ day: key, messages: hit?.messages || 0, conversations: hit?.conversations || 0 });
+      }
+      const last7 = series.slice(-7);
+      el("st-c7").textContent = last7.reduce((n, x) => n + x.conversations, 0);
+      el("st-m7").textContent = last7.reduce((n, x) => n + x.messages, 0);
+      el("st-c30").textContent = (logsCache?.byDay || []).reduce((n, x) => n + x.conversations, 0);
+      el("st-all").textContent = logsCache?.total ?? "–";
+      const max = Math.max(1, ...series.map((x) => x.messages));
+      el("chart").innerHTML = series.map((x) => `
+        <div class="bar" title="${x.day}: ${x.messages} messages, ${x.conversations} conversations">
+          <span class="n">${x.messages || ""}</span>
+          <i style="height:${Math.round((x.messages / max) * 100)}%"></i>
+          <b>${x.day.slice(5)}</b>
+        </div>`).join("");
+      el("days-body").innerHTML = (logsCache?.byDay || []).map((x) =>
+        `<tr><td>${esc(x.day)}</td><td>${x.conversations}</td><td>${x.messages}</td></tr>`).join("") || '<tr><td colspan="3" class="empty">No data yet</td></tr>';
+    }
+
+    /* ---------- knowledge ---------- */
+    function fmtSize(b) { return b > 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.round(b / 1024) + " KB"; }
     function filterKb() {
-      const q = el('kb-filter').value.trim().toLowerCase();
+      const q = el("kb-filter").value.trim().toLowerCase();
       let shown = 0;
-      document.querySelectorAll('.kb-file').forEach(row => {
-        const hit = !q || row.querySelector('.name').textContent.toLowerCase().includes(q);
-        row.style.display = hit ? '' : 'none';
+      document.querySelectorAll(".kb-file").forEach((row) => {
+        const hit = !q || row.querySelector(".name").textContent.toLowerCase().includes(q);
+        row.style.display = hit ? "" : "none";
         if (hit) shown++;
       });
-      if (q) el('kb-usage').textContent = `${shown} matching files`;
+      if (q) el("kb-usage").textContent = `${shown} matching files`;
     }
     async function loadKb() {
       try {
-        const r = await fetch('/admin/api/kb');
-        const d = await r.json();
+        const d = await fetch("/admin/api/kb").then((r) => r.json());
         if (d.error) throw new Error(d.error);
-        el('kb-usage').textContent = `${d.files.length}${d.hasMore ? '+' : ''} files · ${fmtSize(d.totalBytes || 0)}${d.hasMore ? ' (showing first batch)' : ''}`;
-        el('kb-list').innerHTML = d.files.length ? '' : '<span style="color:var(--muted);font-size:13px">No files yet.</span>';
-        d.files.forEach(f => {
-          const row = document.createElement('div');
-          row.className = 'kb-file';
-          row.innerHTML = `<span class="name">${escAttr(f.filename)}</span>
-            <span class="meta">${fmtSize(f.bytes||0)} · ${f.status}</span>`;
-          const del = document.createElement('button');
-          del.className = 'small danger'; del.textContent = 'Delete';
+        el("kb-usage").textContent = `${d.files.length}${d.hasMore ? "+" : ""} files · ${fmtSize(d.totalBytes || 0)}${d.hasMore ? " (showing first batch)" : ""}`;
+        el("kb-list").innerHTML = d.files.length ? "" : '<span class="empty">No files yet.</span>';
+        d.files.forEach((f) => {
+          const row = document.createElement("div");
+          row.className = "kb-file";
+          row.innerHTML = `<span class="name">${esc(f.filename)}</span><span class="meta">${fmtSize(f.bytes || 0)} · ${esc(f.status)}</span>`;
+          const del = document.createElement("button");
+          del.className = "small danger"; del.textContent = "Delete";
           del.onclick = async () => {
             if (!confirm(`Delete "${f.filename}" from the knowledge base? The agent will no longer see it.`)) return;
-            const r2 = await fetch('/admin/api/kb/' + encodeURIComponent(f.id), { method: 'DELETE' });
-            if (r2.ok) { flash('Deleted ✓'); loadKb(); } else flash('Delete failed', false);
+            const r2 = await fetch("/admin/api/kb/" + encodeURIComponent(f.id), { method: "DELETE" });
+            if (r2.ok) { flash("Deleted ✓"); loadKb(); } else flash("Delete failed", false);
           };
           row.appendChild(del);
-          el('kb-list').appendChild(row);
+          el("kb-list").appendChild(row);
         });
       } catch (e) {
-        el('kb-list').innerHTML = `<span style="color:var(--red);font-size:13px">Couldn't load files: ${e.message}</span>`;
+        el("kb-list").innerHTML = `<span class="empty" style="color:var(--red)">Couldn't load files: ${esc(e.message)}</span>`;
       }
     }
     async function uploadKb(file) {
       if (!file) return;
-      if (file.size > 50 * 1048576) return flash('File too large (50 MB max)', false);
-      flash('Uploading ' + file.name + '…');
+      if (file.size > 50 * 1048576) return flash("File too large (50 MB max)", false);
+      flash("Uploading " + file.name + "…");
       const b64 = await new Promise((res, rej) => {
         const fr = new FileReader();
-        fr.onload = () => res(fr.result.split(',')[1]); fr.onerror = rej;
+        fr.onload = () => res(fr.result.split(",")[1]); fr.onerror = rej;
         fr.readAsDataURL(file);
       });
-      const r = await fetch('/admin/api/kb', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ filename: file.name, base64: b64 })
-      });
-      if (r.ok) { flash('Uploaded ✓ (indexing may take a minute)'); loadKb(); }
-      else flash('Upload failed: ' + ((await r.json()).error || r.status), false);
-      el('kb-upload').value = '';
+      const r = await fetch("/admin/api/kb", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: file.name, base64: b64 }) });
+      if (r.ok) { flash("Uploaded ✓ (indexing takes a minute)"); loadKb(); }
+      else flash("Upload failed: " + ((await r.json()).error || r.status), false);
+      el("kb-upload").value = "";
+    }
+    async function addSnippet() {
+      const title = el("snip-title").value.trim().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "note";
+      const body = el("snip-body").value.trim();
+      if (!body) return flash("Write the note first", false);
+      const filename = `note-${title}.md`;
+      const b64 = btoa(unescape(encodeURIComponent(`# ${el("snip-title").value.trim() || "Store note"}\n\n${body}\n`)));
+      const r = await fetch("/admin/api/kb", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename, base64: b64 }) });
+      if (r.ok) { flash("Note added ✓ (indexing takes a minute)"); el("snip-title").value = ""; el("snip-body").value = ""; loadKb(); }
+      else flash("Failed: " + ((await r.json()).error || r.status), false);
     }
 
-    load();
+    loadCfg().then(route);
   </script>
 </body>
 </html>

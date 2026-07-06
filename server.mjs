@@ -1159,7 +1159,13 @@ async function createOpenAIResponse(conversation, cfg = null) {
       {
         type: message.role === "assistant" ? "output_text" : "input_text",
         text: message.content
-      }
+      },
+      // customer photo attachments (nameplate shots etc.) ride along as vision inputs
+      ...(message.role === "user" && Array.isArray(message.images)
+        ? message.images.slice(0, 3)
+            .filter((u) => typeof u === "string" && u.startsWith("data:image/"))
+            .map((u) => ({ type: "input_image", image_url: u }))
+        : [])
     ]
   }));
 
@@ -1215,10 +1221,11 @@ function logChatToCrm(conversation, reply, usedTools, documents, sessionId) {
   const url = process.env.CRM_CHATLOG_URL || "https://nesh-crm.onrender.com/api/hooks/finder-chat";
   const lastUser = [...conversation].reverse().find((m) => m && m.role === "user");
   if (!lastUser || !reply) return;
+  const photoNote = Array.isArray(lastUser.images) && lastUser.images.length ? "[📷 photo attached] " : "";
   const payload = {
     session_id: sessionId || "",
     source: "parts-finder",
-    question: String(lastUser.content || "").slice(0, 8000),
+    question: (photoNote + String(lastUser.content || "")).slice(0, 8000),
     answer: String(reply).slice(0, 20000),
     used_tools: usedTools || "",
     documents: (Array.isArray(documents) ? documents : [])
@@ -1383,6 +1390,25 @@ const server = createServer(async (request, response) => {
       }
     }
 
+    // Activity/Analytics data: proxy the CRM's secret-gated chat-log read so the
+    // browser never holds the shared secret.
+    if (requestUrl.pathname === "/admin/api/logs" && request.method === "GET") {
+      try {
+        const secret = process.env.CRM_CHATLOG_SECRET;
+        if (!secret) throw new Error("CRM_CHATLOG_SECRET not configured.");
+        const base = (process.env.CRM_CHATLOG_URL || "https://nesh-crm.onrender.com/api/hooks/finder-chat")
+          .replace("/finder-chat", "/finder-chat-logs");
+        const qs = new URLSearchParams({ secret, limit: requestUrl.searchParams.get("limit") || "300" });
+        if (requestUrl.searchParams.get("day")) qs.set("day", requestUrl.searchParams.get("day"));
+        const res = await fetch(`${base}?${qs}`);
+        if (!res.ok) throw new Error(`CRM responded ${res.status}`);
+        sendJson(response, 200, await res.json(), origin);
+      } catch (error) {
+        sendJson(response, 502, { error: error.message }, origin);
+      }
+      return;
+    }
+
     if (requestUrl.pathname === "/admin/api/kb" && request.method === "GET") {
       try {
         sendJson(response, 200, await listKbFiles(), origin);
@@ -1474,6 +1500,10 @@ const server = createServer(async (request, response) => {
       let rawBody = "";
       for await (const chunk of request) {
         rawBody += chunk;
+        if (rawBody.length > 20 * 1048576) { // photos ride in the body; cap at 20MB
+          sendJson(response, 413, { error: "Message too large — please attach smaller photos." }, origin);
+          return;
+        }
       }
 
       const parsed = JSON.parse(rawBody || "{}");
