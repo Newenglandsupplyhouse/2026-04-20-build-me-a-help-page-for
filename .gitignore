@@ -1,3 +1,4 @@
 .env
 server.out.log
 server.err.log
+finder-config.json

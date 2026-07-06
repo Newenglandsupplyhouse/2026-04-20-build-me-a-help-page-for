@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadConfig, saveConfig, checkLimits } from "./finder-config.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1125,15 +1126,16 @@ async function getShopifyProductContext(conversation) {
   };
 }
 
-async function createOpenAIResponse(conversation) {
+async function createOpenAIResponse(conversation, cfg = null) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error("Missing OPENAI_API_KEY in .env.");
   }
 
-  const model = process.env.OPENAI_MODEL || "gpt-5-mini";
+  const config = cfg || loadConfig();
+  const model = config.model || process.env.OPENAI_MODEL || "gpt-5-mini";
   const vectorStoreId = process.env.OPENAI_VECTOR_STORE_ID;
-  const enableWebSearch = (process.env.ENABLE_WEB_SEARCH || "true").toLowerCase() !== "false";
+  const enableWebSearch = !!config.enableWebSearch;
 
   const tools = [];
 
@@ -1186,7 +1188,9 @@ async function createOpenAIResponse(conversation) {
       input,
       tools,
       include: ["file_search_call.results"],
-      instructions: "You are a shopping assistant for a Shopify store. Answer with clear, concise help for shoppers. Use live Shopify product data when provided for catalog facts like title, price, availability, variants, and product URLs. Use the vector store for store knowledge like policies, sizing, FAQs, and curated product guidance. Use web search only when it genuinely helps. If any source is missing, say what you do and do not know. Do not invent product facts."
+      // Agent behavior is managed in /admin (persisted in finder-config.json); the default is
+      // the Chatbase "Base Instructions" export adapted for these native tools.
+      instructions: config.instructions
     })
   });
 
@@ -1228,6 +1232,86 @@ function logChatToCrm(conversation, reply, usedTools, documents, sessionId) {
   }).catch(() => {}); // best-effort; a CRM hiccup must never break the finder
 }
 
+// ---------- Parts Finder admin: config-rendered page + management API ----------
+const escapeHtmlServer = (s) => String(s ?? "")
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+// Fill finder.html's __CFG_*__ tokens from the persisted config.
+function renderFinderPage(template, cfg) {
+  const chipsHtml = (Array.isArray(cfg.chips) ? cfg.chips : [])
+    .filter((c) => c && c.label && c.q)
+    .map((c) => `<button type="button" data-q="${escapeHtmlServer(c.q)}">${escapeHtmlServer(c.label)}<span>${escapeHtmlServer(c.sub || "")}</span></button>`)
+    .join("\n        ");
+  return template
+    .replace("__CFG_HEADING__", escapeHtmlServer(cfg.welcomeHeading))
+    .replace("__CFG_WELCOME__", escapeHtmlServer(cfg.welcomeText))
+    .replace("__CFG_PLACEHOLDER__", escapeHtmlServer(cfg.placeholder))
+    .replace("__CFG_CHIPS__", chipsHtml);
+}
+
+// Admin gate (HTTP Basic, username blank). Locked in the cloud until ADMIN_PASSWORD is set;
+// open on local runs for convenience (same convention as nesh-crm).
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
+function adminAuthed(request) {
+  if (!ADMIN_PASSWORD) return !process.env.RENDER;
+  const h = request.headers.authorization || "";
+  if (!h.startsWith("Basic ")) return false;
+  const dec = Buffer.from(h.slice(6), "base64").toString();
+  return dec.slice(dec.indexOf(":") + 1) === ADMIN_PASSWORD;
+}
+
+async function openAiAdmin(pathname, options = {}) {
+  const res = await fetch(`https://api.openai.com${pathname}`, {
+    ...options,
+    headers: {
+      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      ...(options.headers || {})
+    }
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload?.error?.message || `OpenAI ${res.status}`);
+  return payload;
+}
+
+// List knowledge-base files. Membership comes from the vector store (paginated); names/sizes
+// come from ONE bulk /v1/files listing joined locally — avoids per-file lookups that trip
+// OpenAI rate limits on large stores.
+async function listKbFiles() {
+  const vsId = process.env.OPENAI_VECTOR_STORE_ID;
+  const entries = [];
+  let after = "";
+  let more = false;
+  for (let page = 0; page < 60; page++) {
+    const list = await openAiAdmin(`/v1/vector_stores/${vsId}/files?limit=100${after ? `&after=${after}` : ""}`);
+    const data = Array.isArray(list?.data) ? list.data : [];
+    entries.push(...data);
+    more = !!list?.has_more;
+    if (!more || !data.length) break;
+    after = data[data.length - 1].id;
+  }
+  const metaById = new Map();
+  const bulk = await openAiAdmin(`/v1/files?limit=10000`);
+  for (const f of (Array.isArray(bulk?.data) ? bulk.data : [])) {
+    metaById.set(f.id, { filename: f.filename || f.id, bytes: f.bytes || 0 });
+  }
+  const files = entries.map((e) => {
+    const meta = metaById.get(e.id) || { filename: e.id, bytes: e.usage_bytes || 0 };
+    return { id: e.id, filename: meta.filename, bytes: meta.bytes, status: e.status || "unknown" };
+  });
+  files.sort((a, b) => a.filename.localeCompare(b.filename));
+  return { files, totalBytes: files.reduce((n, f) => n + (f.bytes || 0), 0), hasMore: more };
+}
+
+async function readJsonBody(request, maxBytes = 80 * 1048576) {
+  let raw = "";
+  for await (const chunk of request) {
+    raw += chunk;
+    if (raw.length > maxBytes) throw new Error("Request body too large.");
+  }
+  return JSON.parse(raw || "{}");
+}
+
 await loadEnvFile();
 
 const server = createServer(async (request, response) => {
@@ -1252,11 +1336,97 @@ const server = createServer(async (request, response) => {
 
   if (request.method === "GET" && (requestUrl.pathname === "/finder" || requestUrl.pathname === "/finder/")) {
     try {
-      const html = await readFile(path.join(__dirname, "finder.html"), "utf8");
-      sendHtml(response, 200, html, origin);
+      const template = await readFile(path.join(__dirname, "finder.html"), "utf8");
+      sendHtml(response, 200, renderFinderPage(template, loadConfig()), origin);
     } catch (error) {
       sendJson(response, 500, { error: `Failed to load finder page: ${error.message}` }, origin);
     }
+    return;
+  }
+
+  // ---------- Admin panel (HTTP Basic; see adminAuthed) ----------
+  if (requestUrl.pathname === "/admin" || requestUrl.pathname.startsWith("/admin/")) {
+    if (!adminAuthed(request)) {
+      response.writeHead(401, { "WWW-Authenticate": 'Basic realm="Parts Finder Admin"' });
+      response.end("Authentication required");
+      return;
+    }
+
+    if (request.method === "GET" && (requestUrl.pathname === "/admin" || requestUrl.pathname === "/admin/")) {
+      try {
+        const html = await readFile(path.join(__dirname, "admin.html"), "utf8");
+        response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+        response.end(html);
+      } catch (error) {
+        sendJson(response, 500, { error: error.message }, origin);
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === "/admin/api/config") {
+      if (request.method === "GET") {
+        sendJson(response, 200, loadConfig(), origin);
+        return;
+      }
+      if (request.method === "PUT") {
+        try {
+          const body = await readJsonBody(request, 1048576);
+          const allowed = ["instructions", "model", "enableWebSearch", "welcomeHeading", "welcomeText",
+            "placeholder", "chips", "rateLimitPerMin", "dailyCap"];
+          const partial = {};
+          for (const k of allowed) if (body[k] !== undefined) partial[k] = body[k];
+          sendJson(response, 200, saveConfig(partial), origin);
+        } catch (error) {
+          sendJson(response, 400, { error: error.message }, origin);
+        }
+        return;
+      }
+    }
+
+    if (requestUrl.pathname === "/admin/api/kb" && request.method === "GET") {
+      try {
+        sendJson(response, 200, await listKbFiles(), origin);
+      } catch (error) {
+        sendJson(response, 500, { error: error.message }, origin);
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === "/admin/api/kb" && request.method === "POST") {
+      try {
+        const { filename, base64 } = await readJsonBody(request);
+        if (!filename || !base64) throw new Error("filename and base64 are required.");
+        const bytes = Buffer.from(base64, "base64");
+        const form = new FormData();
+        form.append("purpose", "assistants");
+        form.append("file", new Blob([bytes]), filename);
+        const uploaded = await openAiAdmin("/v1/files", { method: "POST", body: form });
+        await openAiAdmin(`/v1/vector_stores/${process.env.OPENAI_VECTOR_STORE_ID}/files`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file_id: uploaded.id })
+        });
+        sendJson(response, 200, { ok: true, fileId: uploaded.id }, origin);
+      } catch (error) {
+        sendJson(response, 500, { error: error.message }, origin);
+      }
+      return;
+    }
+
+    const kbDelete = requestUrl.pathname.match(/^\/admin\/api\/kb\/([\w-]+)$/);
+    if (kbDelete && request.method === "DELETE") {
+      try {
+        const fileId = kbDelete[1];
+        await openAiAdmin(`/v1/vector_stores/${process.env.OPENAI_VECTOR_STORE_ID}/files/${fileId}`, { method: "DELETE" });
+        try { await openAiAdmin(`/v1/files/${fileId}`, { method: "DELETE" }); } catch { /* already detached */ }
+        sendJson(response, 200, { ok: true }, origin);
+      } catch (error) {
+        sendJson(response, 500, { error: error.message }, origin);
+      }
+      return;
+    }
+
+    sendJson(response, 404, { error: "Not found." }, origin);
     return;
   }
 
@@ -1290,6 +1460,17 @@ const server = createServer(async (request, response) => {
 
   if (request.method === "POST" && requestUrl.pathname === "/api/chat") {
     try {
+      const cfg = loadConfig();
+
+      // Abuse protection: per-IP per-minute + global daily caps (this page has been bot-scraped).
+      const ip = (request.headers["x-forwarded-for"] || "").split(",")[0].trim()
+        || request.socket.remoteAddress || "unknown";
+      const rejection = checkLimits(ip, cfg);
+      if (rejection) {
+        sendJson(response, rejection.status, { error: rejection.message }, origin);
+        return;
+      }
+
       let rawBody = "";
       for await (const chunk of request) {
         rawBody += chunk;
@@ -1303,7 +1484,7 @@ const server = createServer(async (request, response) => {
         return;
       }
 
-      const openAIResponse = await createOpenAIResponse(conversation);
+      const openAIResponse = await createOpenAIResponse(conversation, cfg);
       const usedSources = [
         ...openAIResponse.usedSources,
         summarizeTools(openAIResponse.payload.output)
@@ -1328,7 +1509,10 @@ const server = createServer(async (request, response) => {
         usedTools: usedSources ? `Used ${usedSources.replace(/^Used /, "")}` : "",
         documents
       }, origin);
-      logChatToCrm(conversation, finalReply, usedSources, documents, parsed.sessionId);
+      // admin test-mode sessions (TEST- prefix, via /finder?test=1) are not logged to the CRM
+      if (!String(parsed.sessionId || "").startsWith("TEST-")) {
+        logChatToCrm(conversation, finalReply, usedSources, documents, parsed.sessionId);
+      }
       return;
     } catch (error) {
       sendJson(response, 500, { error: error.message }, origin);

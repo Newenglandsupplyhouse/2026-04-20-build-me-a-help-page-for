@@ -195,22 +195,17 @@
     <div class="col" id="welcome">
       <div class="welcome">
         <span class="kicker">New England Supply House</span>
-        <h2>Find the right part, fast.</h2>
-        <p>Describe your unit or the part you need. I search live inventory and OEM manuals to match part numbers, pricing, and availability.</p>
+        <h2>__CFG_HEADING__</h2>
+        <p>__CFG_WELCOME__</p>
       </div>
-      <div class="suggestions" id="suggestions">
-        <button type="button" data-q="I need a replacement ignition control module for a gas furnace. How do I find the right one?">Find a replacement igniter / control module<span>By unit model or symptom</span></button>
-        <button type="button" data-q="Can you cross-reference a part number to what you carry? I have OEM part 62-102635-81.">Cross-reference a part number<span>OEM &rarr; in-stock equivalent</span></button>
-        <button type="button" data-q="My furnace has no heat and the igniter never glows. What parts should I check?">Diagnose a no-heat issue<span>Symptom &rarr; likely parts</span></button>
-        <button type="button" data-q="What controls and igniters do you carry that fit a Metropac unit?">See parts for my brand<span>Metropac, Reznor, Trane &amp; more</span></button>
-      </div>
+      <div class="suggestions" id="suggestions">__CFG_CHIPS__</div>
     </div>
   </main>
 
   <footer class="composer">
     <div class="col">
       <div class="composer-row">
-        <textarea id="input" rows="1" placeholder="Describe your unit or the part you need…" autocomplete="off"></textarea>
+        <textarea id="input" rows="1" placeholder="__CFG_PLACEHOLDER__" autocomplete="off"></textarea>
         <button id="send" type="button" aria-label="Send">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
         </button>
@@ -235,10 +230,12 @@
       /** conversation history sent to the engine on every turn */
       let conversation = [];
       let busy = false;
-      /** stable id so all turns of this visit group into one logged conversation */
-      const sessionId = (window.crypto && crypto.randomUUID)
+      /** stable id so all turns of this visit group into one logged conversation.
+          ?test=1 (admin "Test the agent" link) prefixes TEST- so the server skips CRM logging. */
+      const isTest = new URLSearchParams(location.search).has("test");
+      const sessionId = (isTest ? "TEST-" : "") + ((window.crypto && crypto.randomUUID)
         ? crypto.randomUUID()
-        : `s-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        : `s-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
       // ---- lightweight, safe markdown rendering -------------------------
       function escapeHtml(s) {
@@ -355,8 +352,11 @@
           typingEl.remove();
 
           if (!res.ok || data.error) {
-            addMessage("assistant",
-              `<p>Sorry — something went wrong reaching the assistant. Please try again in a moment.</p>`);
+            // surface friendly server-provided messages (e.g. rate-limit notices) when present
+            const msg = (res.status === 429 && data.error)
+              ? escapeHtml(data.error)
+              : "Sorry — something went wrong reaching the assistant. Please try again in a moment.";
+            addMessage("assistant", `<p>${msg}</p>`);
             // keep conversation consistent: drop the unanswered user turn
             conversation.pop();
             return;

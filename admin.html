@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Parts Finder — Admin</title>
+  <style>
+    :root {
+      --bg: #08080b; --panel: #111117; --panel-2: #16161d; --border: #26262f;
+      --text: #f5f5f7; --muted: #a6a8b3; --accent: #4f7cff; --green: #35d07f; --red: #e5534b;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 28px 18px 80px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 26px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 18px; }
+    .card h2 { font-size: 15px; margin: 0 0 4px; }
+    .card .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; line-height: 1.5; }
+    label { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 5px; }
+    input[type=text], input[type=number], textarea, select {
+      width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+      border-radius: 9px; padding: 9px 11px; font-size: 13.5px; font-family: inherit;
+    }
+    textarea { resize: vertical; line-height: 1.5; }
+    textarea:focus, input:focus, select:focus { outline: none; border-color: #3a4a7a; }
+    #instructions { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+    .row { display: flex; gap: 10px; }
+    .row > * { flex: 1; }
+    .chip-row { display: grid; grid-template-columns: 1.2fr 1fr 1.6fr; gap: 8px; margin-bottom: 8px; }
+    button.primary {
+      background: var(--accent); color: #fff; border: 0; border-radius: 9px;
+      padding: 10px 18px; font-size: 13.5px; cursor: pointer; margin-top: 14px;
+    }
+    button.primary:hover { background: #3c67e6; }
+    button.small { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 7px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+    button.small:hover { color: var(--text); }
+    button.danger { color: var(--red); border-color: #4a2a2a; }
+    .toggle { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 13.5px; }
+    .kb-file { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .kb-file:last-child { border-bottom: 0; }
+    .kb-file .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .kb-file .meta { color: var(--muted); font-size: 11.5px; flex: 0 0 auto; }
+    .status { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 9px 20px; font-size: 13px; display: none; box-shadow: 0 6px 24px #0009; }
+    .status.ok { color: var(--green); } .status.err { color: var(--red); }
+    a { color: #8fb0ff; text-decoration: none; }
+    .links { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; }
+    .pill { background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 7px 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🔧 Parts Finder — Admin</h1>
+    <div class="sub">Manage the agent's behavior. Changes save to the server instantly — no redeploy needed.</div>
+
+    <div class="card">
+      <h2>Quick links</h2>
+      <div class="links" style="margin-top:10px">
+        <a class="pill" href="/finder?test=1" target="_blank">🧪 Test the agent (not logged)</a>
+        <a class="pill" href="/finder" target="_blank">👁 View live finder</a>
+        <a class="pill" href="https://nesh-crm.onrender.com/api/chat-logs?limit=50" target="_blank">📜 Chat logs (CRM)</a>
+      </div>
+      <p class="hint" style="margin:12px 0 0">Chat transcripts email you daily at 7:00 AM ET (skipped when there were no chats).</p>
+    </div>
+
+    <div class="card">
+      <h2>Agent instructions (system prompt)</h2>
+      <p class="hint">The agent's personality and rules — ported from your Chatbase "Base Instructions". Edit and save; takes effect on the next customer message.</p>
+      <textarea id="instructions" rows="18"></textarea>
+      <button class="primary" onclick="save({instructions: el('instructions').value})">Save instructions</button>
+    </div>
+
+    <div class="card">
+      <h2>Model &amp; tools</h2>
+      <p class="hint">Chatbase ran GPT-5. gpt-5-mini is ~10× cheaper and handles parts lookups well; switch here anytime if you want maximum answer quality.</p>
+      <div class="row">
+        <div>
+          <label>OpenAI model</label>
+          <input type="text" id="model" list="models">
+          <datalist id="models">
+            <option value="gpt-5-mini"><option value="gpt-5"><option value="gpt-5-nano"><option value="gpt-4.1-mini">
+          </datalist>
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <div class="toggle"><input type="checkbox" id="enableWebSearch"> <span>Web search fallback (manufacturer sites)</span></div>
+        </div>
+      </div>
+      <button class="primary" onclick="save({model: el('model').value, enableWebSearch: el('enableWebSearch').checked})">Save model &amp; tools</button>
+    </div>
+
+    <div class="card">
+      <h2>Chat interface</h2>
+      <p class="hint">What customers see before they type. Chips are the clickable question suggestions.</p>
+      <label>Heading</label>
+      <input type="text" id="welcomeHeading">
+      <label>Welcome text</label>
+      <textarea id="welcomeText" rows="3"></textarea>
+      <label>Input placeholder</label>
+      <input type="text" id="placeholder">
+      <label>Suggestion chips (label · subtitle · question it sends)</label>
+      <div id="chips"></div>
+      <button class="small" onclick="addChip()">+ Add chip</button>
+      <br>
+      <button class="primary" onclick="saveInterface()">Save chat interface</button>
+    </div>
+
+    <div class="card">
+      <h2>Knowledge base (manuals)</h2>
+      <p class="hint">The documents the agent searches — your OpenAI vector store. PDFs work best when their text is selectable. Large libraries take ~30s to list.</p>
+      <input type="text" id="kb-filter" placeholder="Filter files by name…" oninput="filterKb()" style="margin-bottom:10px">
+      <div id="kb-list" style="margin-bottom:10px; max-height: 420px; overflow-y: auto;">Loading…</div>
+      <input type="file" id="kb-upload" accept=".pdf,.txt,.docx,.md" style="display:none" onchange="uploadKb(this.files[0])">
+      <button class="small" onclick="el('kb-upload').click()">⬆ Upload document</button>
+      <span id="kb-usage" class="meta" style="color:var(--muted);font-size:12px;margin-left:10px"></span>
+    </div>
+
+    <div class="card">
+      <h2>Abuse protection</h2>
+      <p class="hint">This page was bot-scraped in the past — these caps keep a bot from burning OpenAI credits. Normal customers never hit them.</p>
+      <div class="row">
+        <div>
+          <label>Max messages per visitor per minute</label>
+          <input type="number" id="rateLimitPerMin" min="1" max="60">
+        </div>
+        <div>
+          <label>Max total messages per day</label>
+          <input type="number" id="dailyCap" min="10" max="100000">
+        </div>
+      </div>
+      <button class="primary" onclick="save({rateLimitPerMin: +el('rateLimitPerMin').value, dailyCap: +el('dailyCap').value})">Save limits</button>
+    </div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <script>
+    "use strict";
+    const el = (id) => document.getElementById(id);
+    let cfg = null;
+
+    function flash(msg, ok = true) {
+      const s = el('status');
+      s.textContent = msg; s.className = 'status ' + (ok ? 'ok' : 'err'); s.style.display = 'block';
+      clearTimeout(flash._t); flash._t = setTimeout(() => s.style.display = 'none', 2600);
+    }
+
+    async function load() {
+      const r = await fetch('/admin/api/config');
+      cfg = await r.json();
+      el('instructions').value = cfg.instructions || '';
+      el('model').value = cfg.model || '';
+      el('enableWebSearch').checked = !!cfg.enableWebSearch;
+      el('welcomeHeading').value = cfg.welcomeHeading || '';
+      el('welcomeText').value = cfg.welcomeText || '';
+      el('placeholder').value = cfg.placeholder || '';
+      el('rateLimitPerMin').value = cfg.rateLimitPerMin || 8;
+      el('dailyCap').value = cfg.dailyCap || 400;
+      renderChips(cfg.chips || []);
+      loadKb();
+    }
+
+    function renderChips(chips) {
+      el('chips').innerHTML = '';
+      chips.forEach((c, i) => {
+        const row = document.createElement('div');
+        row.className = 'chip-row';
+        row.innerHTML = `
+          <input type="text" placeholder="Label" value="${escAttr(c.label)}" data-k="label">
+          <input type="text" placeholder="Subtitle" value="${escAttr(c.sub)}" data-k="sub">
+          <div style="display:flex;gap:6px">
+            <input type="text" placeholder="Question it sends" value="${escAttr(c.q)}" data-k="q" style="flex:1">
+            <button class="small danger" onclick="this.closest('.chip-row').remove()">✕</button>
+          </div>`;
+        el('chips').appendChild(row);
+      });
+    }
+    function escAttr(s) { return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+    function addChip() { renderChipsAppend(); }
+    function renderChipsAppend() {
+      const chips = readChips(); chips.push({label:'',sub:'',q:''}); renderChips(chips);
+    }
+    function readChips() {
+      return [...document.querySelectorAll('.chip-row')].map(row => {
+        const g = (k) => row.querySelector(`[data-k=${k}]`).value.trim();
+        return { label: g('label'), sub: g('sub'), q: g('q') };
+      }).filter(c => c.label && c.q);
+    }
+    function saveInterface() {
+      save({
+        welcomeHeading: el('welcomeHeading').value,
+        welcomeText: el('welcomeText').value,
+        placeholder: el('placeholder').value,
+        chips: readChips(),
+      });
+    }
+
+    async function save(partial) {
+      try {
+        const r = await fetch('/admin/api/config', {
+          method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(partial)
+        });
+        if (!r.ok) throw new Error((await r.json()).error || r.status);
+        cfg = await r.json();
+        flash('Saved ✓');
+      } catch (e) { flash('Save failed: ' + e.message, false); }
+    }
+
+    // ---- knowledge base ----
+    function fmtSize(b) { return b > 1048576 ? (b/1048576).toFixed(1)+' MB' : Math.round(b/1024)+' KB'; }
+    function filterKb() {
+      const q = el('kb-filter').value.trim().toLowerCase();
+      let shown = 0;
+      document.querySelectorAll('.kb-file').forEach(row => {
+        const hit = !q || row.querySelector('.name').textContent.toLowerCase().includes(q);
+        row.style.display = hit ? '' : 'none';
+        if (hit) shown++;
+      });
+      if (q) el('kb-usage').textContent = `${shown} matching files`;
+    }
+    async function loadKb() {
+      try {
+        const r = await fetch('/admin/api/kb');
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        el('kb-usage').textContent = `${d.files.length}${d.hasMore ? '+' : ''} files · ${fmtSize(d.totalBytes || 0)}${d.hasMore ? ' (showing first batch)' : ''}`;
+        el('kb-list').innerHTML = d.files.length ? '' : '<span style="color:var(--muted);font-size:13px">No files yet.</span>';
+        d.files.forEach(f => {
+          const row = document.createElement('div');
+          row.className = 'kb-file';
+          row.innerHTML = `<span class="name">${escAttr(f.filename)}</span>
+            <span class="meta">${fmtSize(f.bytes||0)} · ${f.status}</span>`;
+          const del = document.createElement('button');
+          del.className = 'small danger'; del.textContent = 'Delete';
+          del.onclick = async () => {
+            if (!confirm(`Delete "${f.filename}" from the knowledge base? The agent will no longer see it.`)) return;
+            const r2 = await fetch('/admin/api/kb/' + encodeURIComponent(f.id), { method: 'DELETE' });
+            if (r2.ok) { flash('Deleted ✓'); loadKb(); } else flash('Delete failed', false);
+          };
+          row.appendChild(del);
+          el('kb-list').appendChild(row);
+        });
+      } catch (e) {
+        el('kb-list').innerHTML = `<span style="color:var(--red);font-size:13px">Couldn't load files: ${e.message}</span>`;
+      }
+    }
+    async function uploadKb(file) {
+      if (!file) return;
+      if (file.size > 50 * 1048576) return flash('File too large (50 MB max)', false);
+      flash('Uploading ' + file.name + '…');
+      const b64 = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(fr.result.split(',')[1]); fr.onerror = rej;
+        fr.readAsDataURL(file);
+      });
+      const r = await fetch('/admin/api/kb', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ filename: file.name, base64: b64 })
+      });
+      if (r.ok) { flash('Uploaded ✓ (indexing may take a minute)'); loadKb(); }
+      else flash('Upload failed: ' + ((await r.json()).error || r.status), false);
+      el('kb-upload').value = '';
+    }
+
+    load();
+  </script>
+</body>
+</html>
