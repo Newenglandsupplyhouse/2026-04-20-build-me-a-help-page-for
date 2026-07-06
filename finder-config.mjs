@@ -144,7 +144,7 @@ export const DEFAULT_CONFIG = {
     { label: "Find a replacement igniter / control module", sub: "By unit model or symptom", q: "I need a replacement ignition control module for a gas furnace. How do I find the right one?" },
     { label: "Cross-reference a part number", sub: "OEM → in-stock equivalent", q: "Can you cross-reference a part number to what you carry? I have OEM part 62-102635-81." },
     { label: "Diagnose a no-heat issue", sub: "Symptom → likely parts", q: "My furnace has no heat and the igniter never glows. What parts should I check?" },
-    { label: "See parts for my brand", sub: "Metropac, Reznor, Trane & more", q: "What controls and igniters do you carry that fit a Metropac unit?" },
+    { label: "See parts for my brand", sub: "Goodman, Rheem, Trane, Reznor & more", q: "What HVAC brands and manufacturers do you carry parts for?" },
   ],
   // Abuse protection (the parts-finder page has already been bot-scraped once)
   rateLimitPerMin: 8,      // max /api/chat requests per IP per minute
