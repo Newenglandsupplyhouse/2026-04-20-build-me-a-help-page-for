@@ -1203,6 +1203,31 @@ async function createOpenAIResponse(conversation) {
   };
 }
 
+// Fire-and-forget: record a completed Parts Finder Q&A turn in the NESH CRM (chat_logs).
+// Never blocks or affects the customer's reply; silently no-ops if CRM_CHATLOG_SECRET is unset.
+function logChatToCrm(conversation, reply, usedTools, documents, sessionId) {
+  const secret = process.env.CRM_CHATLOG_SECRET;
+  if (!secret) return;
+  const url = process.env.CRM_CHATLOG_URL || "https://nesh-crm.onrender.com/api/hooks/finder-chat";
+  const lastUser = [...conversation].reverse().find((m) => m && m.role === "user");
+  if (!lastUser || !reply) return;
+  const payload = {
+    session_id: sessionId || "",
+    source: "parts-finder",
+    question: String(lastUser.content || "").slice(0, 8000),
+    answer: String(reply).slice(0, 20000),
+    used_tools: usedTools || "",
+    documents: (Array.isArray(documents) ? documents : [])
+      .map((d) => ({ filename: d.filename || d.title || "", url: d.url || d.document_url || d.file_url || "" }))
+      .slice(0, 20),
+  };
+  fetch(`${url}?secret=${encodeURIComponent(secret)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).catch(() => {}); // best-effort; a CRM hiccup must never break the finder
+}
+
 await loadEnvFile();
 
 const server = createServer(async (request, response) => {
@@ -1303,6 +1328,7 @@ const server = createServer(async (request, response) => {
         usedTools: usedSources ? `Used ${usedSources.replace(/^Used /, "")}` : "",
         documents
       }, origin);
+      logChatToCrm(conversation, finalReply, usedSources, documents, parsed.sessionId);
       return;
     } catch (error) {
       sendJson(response, 500, { error: error.message }, origin);

@@ -235,6 +235,10 @@
       /** conversation history sent to the engine on every turn */
       let conversation = [];
       let busy = false;
+      /** stable id so all turns of this visit group into one logged conversation */
+      const sessionId = (window.crypto && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `s-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
       // ---- lightweight, safe markdown rendering -------------------------
       function escapeHtml(s) {
@@ -345,7 +349,7 @@
           const res = await fetch("/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ conversation })
+            body: JSON.stringify({ conversation, sessionId })
           });
           const data = await res.json().catch(() => ({}));
           typingEl.remove();
