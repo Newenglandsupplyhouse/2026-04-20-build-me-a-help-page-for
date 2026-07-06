@@ -1225,6 +1225,16 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  if (request.method === "GET" && (requestUrl.pathname === "/finder" || requestUrl.pathname === "/finder/")) {
+    try {
+      const html = await readFile(path.join(__dirname, "finder.html"), "utf8");
+      sendHtml(response, 200, html, origin);
+    } catch (error) {
+      sendJson(response, 500, { error: `Failed to load finder page: ${error.message}` }, origin);
+    }
+    return;
+  }
+
   if (request.method === "GET" && requestUrl.pathname === "/chatbase-help/reset") {
     const nextUrl = requestUrl.searchParams.get("next") || "/chatbase-help";
     sendHtml(response, 200, buildChatbaseResetPage(nextUrl), origin);
