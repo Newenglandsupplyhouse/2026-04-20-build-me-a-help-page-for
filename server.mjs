@@ -1351,6 +1351,25 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  // Short, clean mobile link for Claude Tools: /t/<TOOLS_TOKEN> — no query string, no special
+  // chars, so it survives copy/paste, messaging apps, and Add-to-Home-Screen intact.
+  const shortTools = requestUrl.pathname.match(/^\/t\/([A-Za-z0-9]+)\/?$/);
+  if (request.method === "GET" && shortTools) {
+    if (process.env.TOOLS_TOKEN && shortTools[1] === process.env.TOOLS_TOKEN) {
+      try {
+        const html = await readFile(path.join(__dirname, "tools.html"), "utf8");
+        response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+        response.end(html);
+      } catch (error) {
+        sendJson(response, 500, { error: error.message }, origin);
+      }
+    } else {
+      response.writeHead(404, { "Content-Type": "text/plain" });
+      response.end("Not found");
+    }
+    return;
+  }
+
   // Public home-screen icon for the mobile Claude Tools page (not sensitive; ungated so
   // iOS/Android can always fetch it for the home-screen shortcut).
   if (request.method === "GET" && requestUrl.pathname === "/tools-icon.png") {
