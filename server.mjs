@@ -1351,9 +1351,28 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  // Public home-screen icon for the mobile Claude Tools page (not sensitive; ungated so
+  // iOS/Android can always fetch it for the home-screen shortcut).
+  if (request.method === "GET" && requestUrl.pathname === "/tools-icon.png") {
+    try {
+      const png = await readFile(path.join(__dirname, "tools-icon.png"));
+      response.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" });
+      response.end(png);
+    } catch (error) {
+      sendJson(response, 404, { error: "icon not found" }, origin);
+    }
+    return;
+  }
+
   // ---------- Admin panel (HTTP Basic; see adminAuthed) ----------
   if (requestUrl.pathname === "/admin" || requestUrl.pathname.startsWith("/admin/")) {
-    if (!adminAuthed(request)) {
+    // The Claude Tools launcher (/admin/tools) also accepts a URL token (?k=TOOLS_TOKEN) so it
+    // opens on a phone with NO Basic-auth dialog — many mobile/in-app browsers show a blank
+    // dark page instead of the password prompt. Everything else stays password-only.
+    const isToolsGet = request.method === "GET"
+      && (requestUrl.pathname === "/admin/tools" || requestUrl.pathname === "/admin/tools/");
+    const tokenOk = !!process.env.TOOLS_TOKEN && requestUrl.searchParams.get("k") === process.env.TOOLS_TOKEN;
+    if (!(adminAuthed(request) || (isToolsGet && tokenOk))) {
       response.writeHead(401, { "WWW-Authenticate": 'Basic realm="Parts Finder Admin"' });
       response.end("Authentication required");
       return;
