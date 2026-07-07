@@ -1370,6 +1370,19 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    // Mobile launcher: the "Claude Tools" page, gated by the admin password (it shows the
+    // CRM/admin passwords). Open on a phone → Add to Home Screen for an app icon.
+    if (request.method === "GET" && (requestUrl.pathname === "/admin/tools" || requestUrl.pathname === "/admin/tools/")) {
+      try {
+        const html = await readFile(path.join(__dirname, "tools.html"), "utf8");
+        response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+        response.end(html);
+      } catch (error) {
+        sendJson(response, 500, { error: error.message }, origin);
+      }
+      return;
+    }
+
     if (requestUrl.pathname === "/admin/api/config") {
       if (request.method === "GET") {
         sendJson(response, 200, loadConfig(), origin);
