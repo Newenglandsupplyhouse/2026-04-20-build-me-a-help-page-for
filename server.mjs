@@ -1027,7 +1027,6 @@ async function getShopifyProductContext(conversation) {
           id
           title
           handle
-          vendor
           productType
           availableForSale
           description
@@ -1107,7 +1106,7 @@ async function getShopifyProductContext(conversation) {
     lines.push(
       [
         `- ${product.title}`,
-        product.vendor ? `vendor: ${product.vendor}` : "",
+        // Supplier/vendor is confidential — never expose it to customers (vendor != brand).
         product.productType ? `type: ${product.productType}` : "",
         `availability: ${product.availableForSale ? "available" : "unavailable"}`,
         `price: ${priceText}`,
