@@ -1506,33 +1506,11 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  if (request.method === "GET" && requestUrl.pathname === "/chatbase-help/reset") {
-    const nextUrl = requestUrl.searchParams.get("next") || "/chatbase-help";
-    sendHtml(response, 200, buildChatbaseResetPage(nextUrl), origin);
-    return;
-  }
-
-  if (requestUrl.pathname === "/chatbase-help" || requestUrl.pathname.startsWith("/chatbase-help/")) {
-    try {
-      await proxyChatbaseRequest(request, response, buildChatbaseHelpTarget(requestUrl), {
-        injectHtml: true
-      });
-      return;
-    } catch (error) {
-      sendJson(response, 502, { error: `Chatbase help proxy failed: ${error.message}` }, origin);
-      return;
-    }
-  }
-
-  if (requestUrl.pathname.startsWith("/__cb/")) {
-    try {
-      await proxyChatbaseRequest(request, response, buildChatbaseAssetTarget(requestUrl));
-      return;
-    } catch (error) {
-      sendJson(response, 502, { error: `Chatbase asset proxy failed: ${error.message}` }, origin);
-      return;
-    }
-  }
+  // Third-party Chatbase help-proxy routes (/chatbase-help, /chatbase-help/reset, /__cb/)
+  // removed 2026-07-19: the marketing-site demo and storefront finder now use the
+  // first-party OpenAI engine (/finder + /api/chat). These paths now fall through to 404.
+  // The buildChatbase*/proxyChatbaseRequest/injectChatbaseOverrides helpers above are now
+  // unused dead code and can be pruned in a follow-up.
 
   if (request.method === "POST" && requestUrl.pathname === "/api/chat") {
     try {
@@ -1600,15 +1578,8 @@ const server = createServer(async (request, response) => {
     }
   }
 
-  if (requestUrl.pathname.startsWith("/api/chat/")) {
-    try {
-      await proxyChatbaseRequest(request, response, buildChatbaseApiTarget(requestUrl));
-      return;
-    } catch (error) {
-      sendJson(response, 502, { error: `Chatbase API proxy failed: ${error.message}` }, origin);
-      return;
-    }
-  }
+  // (removed 2026-07-19) /api/chat/ trailing-slash Chatbase chat-API proxy — the
+  // first-party /api/chat engine above (exact match) is unaffected.
 
   sendJson(response, 404, { error: "Not found." }, origin);
 });
