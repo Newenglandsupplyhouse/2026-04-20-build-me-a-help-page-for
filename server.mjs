@@ -1211,18 +1211,14 @@ async function createOpenAIResponse(conversation, cfg = null) {
 
   const tools = [];
 
-  // Only hand the model the document tool when the customer actually asked for a
-  // manual/spec/wiring diagram/etc. On an ordinary parts request it would search
-  // the library anyway and narrate loosely-related PDFs ("I found the guide…")
-  // even when the code correctly withholds them — so we take the tool away and it
-  // stays focused on finding the part. Doc requests still get full retrieval.
-  if (vectorStoreId && isDocumentRequest(conversation)) {
-    tools.push({
-      type: "file_search",
-      vector_store_ids: [vectorStoreId],
-      max_num_results: 5
-    });
-  }
+  // The model is deliberately NOT given the document tool. When it could search
+  // the library it narrated loosely-related PDFs ("I found the guide…") on plain
+  // parts queries, and its prose about which docs exist fought the code's gate —
+  // producing replies that claimed to have (or not have) a manual that didn't
+  // match what was actually attached. Documents are now handled in exactly one
+  // place: the handler runs a gated library search (searchDocumentsForQuery) only
+  // when the customer explicitly asks, and appends the matches. The model just
+  // finds the part. (vectorStoreId is still used by that handler-side search.)
 
   if (enableWebSearch) {
     tools.push({
@@ -1627,32 +1623,37 @@ const server = createServer(async (request, response) => {
       ].filter(Boolean).join(" and ");
       const replyText = extractResponseText(openAIResponse.payload);
       const wantsDocuments = isDocumentRequest(conversation);
-      // Only surface documents when the customer actually asked for a manual/spec/
-      // wiring diagram/etc. For an ordinary parts request, recommend the part instead
-      // of dumping a wall of embedding-similar PDFs. Low-relevance matches are dropped
-      // at the source so even a doc request shows only genuinely-related files.
-      let documents = extractFileSearchDocuments(openAIResponse.payload);
-      if (!documents.length && wantsDocuments) {
-        documents = await searchDocumentsForQuery(
-          getLatestUserMessage(conversation),
+
+      // Documents are surfaced ONLY here — the model has no document tool, so it
+      // never narrates PDFs and can't contradict what we actually attach. We hit
+      // the library only when the customer explicitly asked for a manual/spec/etc.,
+      // then keep only files that clear the relevance floor AND genuinely reference
+      // the product they named (drops embedding-similar noise — a thermostat spec
+      // for a Reznor ask, another brand's manual for one we don't stock).
+      let shownDocuments = [];
+      if (wantsDocuments) {
+        const query = getLatestUserMessage(conversation);
+        const queryTokens = significantQueryTokens(query);
+        const found = await searchDocumentsForQuery(
+          query,
           process.env.OPENAI_VECTOR_STORE_ID,
           process.env.OPENAI_API_KEY,
           process.env.OPENAI_MODEL || "gpt-5-mini"
         );
+        shownDocuments = found
+          .filter((doc) => (doc.score || 0) >= DOC_SCORE_MIN)
+          .filter((doc) => documentMatchesQuery(doc, queryTokens))
+          .slice(0, 3);
       }
-      // Drop matches that aren't genuinely relevant, from BOTH the primary payload
-      // and the fallback search. Embedding similarity alone returns a thermostat
-      // "spec sheet" for a Reznor "spec sheet" ask (same score band), so we also
-      // require the doc to actually reference the product the customer named.
-      const queryTokens = significantQueryTokens(getLatestUserMessage(conversation));
-      documents = documents
-        .filter((doc) => (doc.score || 0) >= DOC_SCORE_MIN)
-        .filter((doc) => documentMatchesQuery(doc, queryTokens));
-      const shownDocuments = wantsDocuments ? documents.slice(0, 3) : [];
-      const documentList = formatDocumentList(shownDocuments);
-      const finalReply = shownDocuments.length
-        ? `${replyText || "I found matching documents."}\n\n${documentList}`.trim()
-        : (replyText || "No response text returned.");
+
+      const base = replyText || "No response text returned.";
+      // When they asked for a doc, the code owns the doc messaging: list the real
+      // matches, or say plainly we don't have it — never leave an unanswered ask.
+      const finalReply = !wantsDocuments
+        ? base
+        : shownDocuments.length
+          ? `${base}\n\n${formatDocumentList(shownDocuments)}`.trim()
+          : `${base}\n\nI don't have that exact document in our library yet. Reply with the model number (or a photo of the nameplate) and I'll track down the manual or special-order it for you.`.trim();
 
       sendJson(response, 200, {
         reply: finalReply,
