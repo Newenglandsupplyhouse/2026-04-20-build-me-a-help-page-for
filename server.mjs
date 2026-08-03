@@ -890,8 +890,57 @@ function extractResponseText(payload) {
   return parts.join("\n\n").trim();
 }
 
-// Minimum file_search relevance score for a document to be shown (tune via env).
-const DOC_SCORE_MIN = Number(process.env.DOC_SCORE_MIN) || 0.5;
+// Minimum file_search relevance score for a document to be shown (loose floor;
+// the token gate below does the real relevance work). Tunable via env.
+const DOC_SCORE_MIN = Number(process.env.DOC_SCORE_MIN) || 0.4;
+
+// Words that describe the ASK ("send me the spec sheet") rather than the product.
+// A doc must match on a product/brand/model token, never on these — otherwise a
+// thermostat "spec sheet" answers a request for a Reznor "spec sheet".
+const DOC_REQUEST_WORDS = new Set([
+  "manual", "manuals", "document", "documents", "documentation", "pdf", "pdfs",
+  "datasheet", "datasheets", "data", "sheet", "sheets", "spec", "specs",
+  "specification", "specifications", "submittal", "submittals", "instruction",
+  "instructions", "install", "installation", "wiring", "diagram", "diagrams",
+  "troubleshooting", "guide", "guides", "brochure", "catalog", "cut", "cutsheet",
+  "schematic", "schematics", "drawing", "drawings", "literature"
+]);
+const DOC_STOPWORDS = new Set([
+  "the", "for", "and", "you", "your", "have", "has", "had", "get", "got", "can",
+  "could", "would", "will", "with", "from", "that", "this", "does", "did", "need",
+  "want", "send", "give", "show", "find", "looking", "look", "about", "any",
+  "some", "please", "hello", "there", "what", "which", "where", "when", "how",
+  "are", "was", "were", "been", "being", "into", "onto", "its", "our", "their",
+  "them", "they", "his", "her", "one", "unit", "part", "parts", "number", "model"
+]);
+
+// Pull the meaningful product/brand/model tokens out of a customer message —
+// long words plus model codes like "UDX-200" (normalized to "udx200"). Used to
+// require that a returned document actually references what the customer named.
+function significantQueryTokens(query) {
+  const text = String(query || "").toLowerCase();
+  const tokens = new Set();
+  for (const raw of text.split(/[^a-z0-9]+/)) {
+    if (!raw || DOC_STOPWORDS.has(raw) || DOC_REQUEST_WORDS.has(raw)) continue;
+    // Keep real words (4+ chars) or anything mixing letters and digits.
+    if (raw.length >= 4 || /[a-z]/.test(raw) && /\d/.test(raw)) tokens.add(raw);
+  }
+  // Also capture separated model numbers ("udx 200" / "udx-200" -> "udx200").
+  for (const m of text.matchAll(/[a-z]{2,}[-\s]?\d{2,}[a-z0-9]*|\d{2,}[-\s]?[a-z]{2,}/g)) {
+    tokens.add(m[0].replace(/[-\s]+/g, ""));
+  }
+  return [...tokens];
+}
+
+// Does this document actually reference the product the customer named? Checked
+// against the filename (brand-coded, e.g. REZNORINST / HNYWLLINST) and the text
+// snippet. If the customer named no specific product, don't block on tokens.
+function documentMatchesQuery(doc, tokens) {
+  if (!tokens.length) return true;
+  const hay = `${doc.filename || ""} ${doc.snippet || ""}`.toLowerCase();
+  const squished = hay.replace(/[^a-z0-9]+/g, "");
+  return tokens.some((t) => hay.includes(t) || squished.includes(t));
+}
 
 function extractFileSearchDocuments(payload) {
   const documents = [];
@@ -1565,10 +1614,14 @@ const server = createServer(async (request, response) => {
           process.env.OPENAI_MODEL || "gpt-5-mini"
         );
       }
-      // Drop low-relevance matches from BOTH the primary payload and the fallback
-      // search — the vector store returns embedding-similar files (a thermostat
-      // spec for a "UDX-200 manual" ask) that must not be shown as if they matched.
-      documents = documents.filter((doc) => (doc.score || 0) >= DOC_SCORE_MIN);
+      // Drop matches that aren't genuinely relevant, from BOTH the primary payload
+      // and the fallback search. Embedding similarity alone returns a thermostat
+      // "spec sheet" for a Reznor "spec sheet" ask (same score band), so we also
+      // require the doc to actually reference the product the customer named.
+      const queryTokens = significantQueryTokens(getLatestUserMessage(conversation));
+      documents = documents
+        .filter((doc) => (doc.score || 0) >= DOC_SCORE_MIN)
+        .filter((doc) => documentMatchesQuery(doc, queryTokens));
       const shownDocuments = wantsDocuments ? documents.slice(0, 3) : [];
       const documentList = formatDocumentList(shownDocuments);
       const finalReply = shownDocuments.length
