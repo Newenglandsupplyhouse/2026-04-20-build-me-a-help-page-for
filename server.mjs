@@ -932,14 +932,35 @@ function significantQueryTokens(query) {
   return [...tokens];
 }
 
+// Generic HVAC/plumbing category words. These describe WHAT a part is, not WHICH
+// product — so on their own they must not qualify a different brand's document
+// ("air handler" shouldn't pull a Honeywell doc for a Nordyne request). A brand
+// or model token, when present, always wins over these.
+const GENERIC_TERMS = new Set([
+  "motor", "blower", "fan", "pump", "valve", "handler", "furnace", "boiler",
+  "heater", "water", "air", "coil", "filter", "thermostat", "aquastat", "relay",
+  "transformer", "capacitor", "igniter", "ignitor", "sensor", "control",
+  "controls", "board", "kit", "gas", "oil", "heat", "cool", "cooling", "heating",
+  "burner", "nozzle", "gasket", "bearing", "belt", "pulley", "damper", "actuator",
+  "zone", "switch", "limit", "pressure", "flame", "spark", "electrode", "element",
+  "anode", "thermocouple", "thermopile", "condenser", "evaporator", "compressor",
+  "refrigerant", "duct", "ductwork", "vent", "flue", "draft", "inducer", "exhaust",
+  "intake", "wheel", "housing", "mount", "bracket", "panel", "cover", "door",
+  "plumbing", "radiator", "baseboard", "register", "grille", "diffuser", "handling"
+]);
+
 // Does this document actually reference the product the customer named? Checked
 // against the filename (brand-coded, e.g. REZNORINST / HNYWLLINST) and the text
-// snippet. If the customer named no specific product, don't block on tokens.
+// snippet. When the customer named a brand/model (a non-generic token), require a
+// match on THAT — a generic category word alone won't pass a cross-brand doc. If
+// only generic terms were given (no brand), fall back to matching any of them.
 function documentMatchesQuery(doc, tokens) {
   if (!tokens.length) return true;
   const hay = `${doc.filename || ""} ${doc.snippet || ""}`.toLowerCase();
   const squished = hay.replace(/[^a-z0-9]+/g, "");
-  return tokens.some((t) => hay.includes(t) || squished.includes(t));
+  const has = (t) => hay.includes(t) || squished.includes(t);
+  const strong = tokens.filter((t) => !GENERIC_TERMS.has(t));
+  return (strong.length ? strong : tokens).some(has);
 }
 
 function extractFileSearchDocuments(payload) {
