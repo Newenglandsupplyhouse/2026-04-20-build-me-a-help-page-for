@@ -1630,12 +1630,18 @@ const server = createServer(async (request, response) => {
       // then keep only files that clear the relevance floor AND genuinely reference
       // the product they named (drops embedding-similar noise — a thermostat spec
       // for a Reznor ask, another brand's manual for one we don't stock).
+      const docQuery = getLatestUserMessage(conversation);
+      // A concrete model/part number (a 3+ digit run, or letters touching digits
+      // like "UDX-200" / "L4029E1011") means the ask is specific enough that an
+      // empty result is a real "we don't have it" — vs. a vague "any manuals?"
+      // where the model is still gathering the model number and a not-found note
+      // would be premature.
+      const namedSpecificModel = /\d{3,}|[a-z]\d|\d[a-z]/i.test(docQuery);
       let shownDocuments = [];
       if (wantsDocuments) {
-        const query = getLatestUserMessage(conversation);
-        const queryTokens = significantQueryTokens(query);
+        const queryTokens = significantQueryTokens(docQuery);
         const found = await searchDocumentsForQuery(
-          query,
+          docQuery,
           process.env.OPENAI_VECTOR_STORE_ID,
           process.env.OPENAI_API_KEY,
           process.env.OPENAI_MODEL || "gpt-5-mini"
@@ -1647,13 +1653,16 @@ const server = createServer(async (request, response) => {
       }
 
       const base = replyText || "No response text returned.";
-      // When they asked for a doc, the code owns the doc messaging: list the real
-      // matches, or say plainly we don't have it — never leave an unanswered ask.
-      const finalReply = !wantsDocuments
-        ? base
-        : shownDocuments.length
-          ? `${base}\n\n${formatDocumentList(shownDocuments)}`.trim()
-          : `${base}\n\nI don't have that exact document in our library yet. Reply with the model number (or a photo of the nameplate) and I'll track down the manual or special-order it for you.`.trim();
+      // The code owns all document messaging (the model has no doc tool): list the
+      // real matches, or — only when they named a specific model that we still
+      // couldn't match — say plainly we don't have it. Otherwise the model's own
+      // "what's the model number?" ask stands on its own.
+      let finalReply = base;
+      if (wantsDocuments && shownDocuments.length) {
+        finalReply = `${base}\n\n${formatDocumentList(shownDocuments)}`.trim();
+      } else if (wantsDocuments && namedSpecificModel) {
+        finalReply = `${base}\n\nI'm not finding that exact document in our library. Reply "special order" with the model number and I'll track down the manual for you.`.trim();
+      }
 
       sendJson(response, 200, {
         reply: finalReply,
