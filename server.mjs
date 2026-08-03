@@ -890,6 +890,9 @@ function extractResponseText(payload) {
   return parts.join("\n\n").trim();
 }
 
+// Minimum file_search relevance score for a document to be shown (tune via env).
+const DOC_SCORE_MIN = Number(process.env.DOC_SCORE_MIN) || 0.5;
+
 function extractFileSearchDocuments(payload) {
   const documents = [];
 
@@ -1548,8 +1551,14 @@ const server = createServer(async (request, response) => {
         summarizeTools(openAIResponse.payload.output)
       ].filter(Boolean).join(" and ");
       const replyText = extractResponseText(openAIResponse.payload);
-      let documents = extractFileSearchDocuments(openAIResponse.payload);
-      if (!documents.length && isDocumentRequest(conversation)) {
+      const wantsDocuments = isDocumentRequest(conversation);
+      // Only surface documents when the customer actually asked for a manual/spec/
+      // wiring diagram/etc. For an ordinary parts request, recommend the part instead
+      // of dumping a wall of embedding-similar PDFs. Low-relevance matches are dropped
+      // at the source so even a doc request shows only genuinely-related files.
+      let documents = extractFileSearchDocuments(openAIResponse.payload)
+        .filter((doc) => (doc.score || 0) >= DOC_SCORE_MIN);
+      if (!documents.length && wantsDocuments) {
         documents = await searchDocumentsForQuery(
           getLatestUserMessage(conversation),
           process.env.OPENAI_VECTOR_STORE_ID,
@@ -1557,19 +1566,20 @@ const server = createServer(async (request, response) => {
           process.env.OPENAI_MODEL || "gpt-5-mini"
         );
       }
-      const documentList = formatDocumentList(documents);
-      const finalReply = documents.length
+      const shownDocuments = wantsDocuments ? documents.slice(0, 3) : [];
+      const documentList = formatDocumentList(shownDocuments);
+      const finalReply = shownDocuments.length
         ? `${replyText || "I found matching documents."}\n\n${documentList}`.trim()
         : (replyText || "No response text returned.");
 
       sendJson(response, 200, {
         reply: finalReply,
         usedTools: usedSources ? `Used ${usedSources.replace(/^Used /, "")}` : "",
-        documents
+        documents: shownDocuments
       }, origin);
       // admin test-mode sessions (TEST- prefix, via /finder?test=1) are not logged to the CRM
       if (!String(parsed.sessionId || "").startsWith("TEST-")) {
-        logChatToCrm(conversation, finalReply, usedSources, documents, parsed.sessionId);
+        logChatToCrm(conversation, finalReply, usedSources, shownDocuments, parsed.sessionId);
       }
       return;
     } catch (error) {
