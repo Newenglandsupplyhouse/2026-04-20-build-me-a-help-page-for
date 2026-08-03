@@ -1556,8 +1556,7 @@ const server = createServer(async (request, response) => {
       // wiring diagram/etc. For an ordinary parts request, recommend the part instead
       // of dumping a wall of embedding-similar PDFs. Low-relevance matches are dropped
       // at the source so even a doc request shows only genuinely-related files.
-      let documents = extractFileSearchDocuments(openAIResponse.payload)
-        .filter((doc) => (doc.score || 0) >= DOC_SCORE_MIN);
+      let documents = extractFileSearchDocuments(openAIResponse.payload);
       if (!documents.length && wantsDocuments) {
         documents = await searchDocumentsForQuery(
           getLatestUserMessage(conversation),
@@ -1566,6 +1565,10 @@ const server = createServer(async (request, response) => {
           process.env.OPENAI_MODEL || "gpt-5-mini"
         );
       }
+      // Drop low-relevance matches from BOTH the primary payload and the fallback
+      // search — the vector store returns embedding-similar files (a thermostat
+      // spec for a "UDX-200 manual" ask) that must not be shown as if they matched.
+      documents = documents.filter((doc) => (doc.score || 0) >= DOC_SCORE_MIN);
       const shownDocuments = wantsDocuments ? documents.slice(0, 3) : [];
       const documentList = formatDocumentList(shownDocuments);
       const finalReply = shownDocuments.length
