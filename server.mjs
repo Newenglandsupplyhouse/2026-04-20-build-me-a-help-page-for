@@ -1211,7 +1211,12 @@ async function createOpenAIResponse(conversation, cfg = null) {
 
   const tools = [];
 
-  if (vectorStoreId) {
+  // Only hand the model the document tool when the customer actually asked for a
+  // manual/spec/wiring diagram/etc. On an ordinary parts request it would search
+  // the library anyway and narrate loosely-related PDFs ("I found the guide…")
+  // even when the code correctly withholds them — so we take the tool away and it
+  // stays focused on finding the part. Doc requests still get full retrieval.
+  if (vectorStoreId && isDocumentRequest(conversation)) {
     tools.push({
       type: "file_search",
       vector_store_ids: [vectorStoreId],
