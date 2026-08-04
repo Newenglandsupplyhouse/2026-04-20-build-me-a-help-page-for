@@ -1661,7 +1661,7 @@ const server = createServer(async (request, response) => {
       if (wantsDocuments && shownDocuments.length) {
         finalReply = `${base}\n\n${formatDocumentList(shownDocuments)}`.trim();
       } else if (wantsDocuments && namedSpecificModel) {
-        finalReply = `${base}\n\nI'm not finding that exact document in our library. Reply "special order" with the model number and I'll track down the manual for you.`.trim();
+        finalReply = `${base}\n\nI'm not finding a document on file that matches that exact model — double-check the model number and I'll take another look.`.trim();
       }
 
       sendJson(response, 200, {
