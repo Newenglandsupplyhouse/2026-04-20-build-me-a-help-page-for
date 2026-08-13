@@ -1060,6 +1060,19 @@ function getLatestUserMessage(conversation) {
   return "";
 }
 
+// Conversational filler that carries no product signal. Tokens containing a digit
+// (model/part numbers) are never filtered. Without this, a politely-phrased question
+// like "do you have a replacement lamp for an Epson Home Cinema 8350" used to send
+// its first 8 words — all filler — to Shopify search and find nothing.
+const SEARCH_STOPWORDS = new Set([
+  "do", "you", "have", "a", "an", "the", "for", "my", "i", "im", "need", "needs",
+  "looking", "some", "any", "of", "to", "can", "could", "would", "please", "me",
+  "is", "it", "its", "that", "this", "on", "in", "with", "and", "or", "what",
+  "whats", "does", "did", "was", "help", "find", "buy", "sell", "stock", "carry",
+  "hi", "hello", "hey", "thanks", "there", "your", "we", "us", "get", "am",
+  "wondering", "if", "know", "tell", "about", "just", "also", "still", "think",
+]);
+
 function buildShopifySearchQuery(userText) {
   const compact = userText.trim().replace(/\s+/g, " ");
   if (!compact) {
@@ -1070,11 +1083,14 @@ function buildShopifySearchQuery(userText) {
     return compact;
   }
 
-  return compact
+  const words = compact
     .split(" ")
-    .filter(Boolean)
-    .slice(0, 8)
-    .join(" ");
+    .map((w) => w.replace(/[?!.,;:]+$/, ""))
+    .filter(Boolean);
+  const meaningful = words.filter(
+    (w) => /\d/.test(w) || !SEARCH_STOPWORDS.has(w.toLowerCase().replace(/[^a-z']/g, ""))
+  );
+  return (meaningful.length ? meaningful : words).slice(0, 8).join(" ");
 }
 
 async function getShopifyProductContext(conversation) {
