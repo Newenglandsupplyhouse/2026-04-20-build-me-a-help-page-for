@@ -1006,7 +1006,7 @@ function isDocumentRequest(conversation) {
   return /manual|manuals|document|documents|pdf|pdfs|datasheet|data sheet|spec|specs|submittal|instruction|instructions|wiring|troubleshooting/i.test(latestUserMessage);
 }
 
-async function searchDocumentsForQuery(query, vectorStoreId, apiKey, model) {
+async function searchDocumentsForQuery(query, vectorStoreId, apiKey, model, effort = "low") {
   if (!query || !vectorStoreId) {
     return [];
   }
@@ -1038,6 +1038,10 @@ async function searchDocumentsForQuery(query, vectorStoreId, apiKey, model) {
           max_num_results: 8
         }
       ],
+      // This call runs *after* the main one on doc requests, so its latency lands on top
+      // of the reply the customer is already waiting for. It only has to run the retrieval
+      // — relevance filtering happens in code below — so it needs no deliberation.
+      reasoning: { effort },
       include: ["file_search_call.results"]
     })
   });
@@ -1214,6 +1218,18 @@ async function getShopifyProductContext(conversation) {
   };
 }
 
+// Reasoning effort for both OpenAI calls. Kept deliberately narrow: an unknown value
+// from /admin (or a typo in the env) would make every request 400, so anything not on
+// the allow-list falls back to "low" rather than reaching the API.
+const REASONING_EFFORTS = ["minimal", "low", "medium", "high"];
+
+function resolveReasoningEffort(config) {
+  const raw = String(
+    config?.reasoningEffort || process.env.OPENAI_REASONING_EFFORT || "low"
+  ).trim().toLowerCase();
+  return REASONING_EFFORTS.includes(raw) ? raw : "low";
+}
+
 async function createOpenAIResponse(conversation, cfg = null) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -1222,6 +1238,7 @@ async function createOpenAIResponse(conversation, cfg = null) {
 
   const config = cfg || loadConfig();
   const model = config.model || process.env.OPENAI_MODEL || "gpt-5-mini";
+  const reasoningEffort = resolveReasoningEffort(config);
   const vectorStoreId = process.env.OPENAI_VECTOR_STORE_ID;
   const enableWebSearch = !!config.enableWebSearch;
 
@@ -1283,6 +1300,11 @@ async function createOpenAIResponse(conversation, cfg = null) {
       input,
       tools,
       include: ["file_search_call.results"],
+      // Finding a part in our own catalog is a lookup, not a puzzle. Left at the model's
+      // default effort this call burned ~832 of 986 output tokens on hidden reasoning and
+      // took ~13s; "low" answers the same question in ~5s. Tunable in /admin if replies
+      // ever start missing nuance — raise to "medium" before changing anything else.
+      reasoning: { effort: reasoningEffort },
       // Agent behavior is managed in /admin (persisted in finder-config.json); the default is
       // the Chatbase "Base Instructions" export adapted for these native tools.
       instructions: config.instructions
@@ -1518,7 +1540,7 @@ const server = createServer(async (request, response) => {
       if (request.method === "PUT") {
         try {
           const body = await readJsonBody(request, 1048576);
-          const allowed = ["instructions", "model", "enableWebSearch", "welcomeHeading", "welcomeText",
+          const allowed = ["instructions", "model", "reasoningEffort", "enableWebSearch", "welcomeHeading", "welcomeText",
             "placeholder", "chips", "rateLimitPerMin", "dailyCap"];
           const partial = {};
           for (const k of allowed) if (body[k] !== undefined) partial[k] = body[k];
@@ -1660,7 +1682,8 @@ const server = createServer(async (request, response) => {
           docQuery,
           process.env.OPENAI_VECTOR_STORE_ID,
           process.env.OPENAI_API_KEY,
-          process.env.OPENAI_MODEL || "gpt-5-mini"
+          process.env.OPENAI_MODEL || "gpt-5-mini",
+          resolveReasoningEffort(cfg)
         );
         shownDocuments = found
           .filter((doc) => (doc.score || 0) >= DOC_SCORE_MIN)

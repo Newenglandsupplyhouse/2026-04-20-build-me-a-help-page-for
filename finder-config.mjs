@@ -159,6 +159,11 @@ Your priority is exceptional customer service plus proactive retrieval:
 export const DEFAULT_CONFIG = {
   instructions: DEFAULT_INSTRUCTIONS,
   model: process.env.OPENAI_MODEL || "gpt-5-mini",
+  // Finding a part is a catalog lookup, not a puzzle. At the model's default effort the
+  // main call spent ~832 of 986 output tokens on hidden reasoning (~13s); "low" answers
+  // the same question in ~5s with web search still on. Raise to "medium" if replies
+  // start missing nuance. One of: minimal | low | medium | high.
+  reasoningEffort: process.env.OPENAI_REASONING_EFFORT || "low",
   enableWebSearch: (process.env.ENABLE_WEB_SEARCH || "true").toLowerCase() !== "false",
   // Chat interface (welcome text + placeholder are the exact strings from the Chatbase widget)
   welcomeHeading: "Find the right part, fast.",
