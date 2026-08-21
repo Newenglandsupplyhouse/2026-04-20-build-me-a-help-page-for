@@ -35,36 +35,6 @@
       overflow: hidden;
     }
 
-    header.bar {
-      flex: 0 0 auto;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 14px 18px;
-      border-bottom: 1px solid var(--border);
-      background: linear-gradient(180deg, #0d0d12 0%, var(--bg) 100%);
-    }
-
-    header.bar .dot {
-      width: 9px; height: 9px; border-radius: 50%;
-      background: #35d07f; box-shadow: 0 0 8px #35d07f88;
-      flex: 0 0 auto;
-    }
-
-    header.bar h1 {
-      font-size: 15px; font-weight: 600; margin: 0; letter-spacing: 0.01em;
-    }
-
-    header.bar .spacer { flex: 1 1 auto; }
-
-    header.bar button.newchat {
-      background: transparent; color: var(--muted);
-      border: 1px solid var(--border); border-radius: 999px;
-      font-size: 12.5px; padding: 6px 12px; cursor: pointer;
-      transition: color .15s, border-color .15s;
-    }
-    header.bar button.newchat:hover { color: var(--text); border-color: #3a3a46; }
-
     main.chat {
       flex: 1 1 auto;
       overflow-y: auto;
@@ -202,13 +172,6 @@
   </style>
 </head>
 <body>
-  <header class="bar">
-    <span class="dot"></span>
-    <h1>HVAC Parts &amp; Diagnostic Assistant</h1>
-    <span class="spacer"></span>
-    <button class="newchat" id="newchat" type="button">New chat</button>
-  </header>
-
   <main class="chat" id="chat">
     <div class="col" id="welcome">
       <div class="welcome">
@@ -244,7 +207,6 @@
       const welcomeEl = document.getElementById("welcome");
       const inputEl = document.getElementById("input");
       const sendBtn = document.getElementById("send");
-      const newChatBtn = document.getElementById("newchat");
       const suggestionsWrap = document.getElementById("suggestions");
 
       /** conversation history sent to the engine on every turn */
@@ -588,12 +550,6 @@
           if (btn) { send(btn.getAttribute("data-q")); }
         });
       }
-
-      newChatBtn.addEventListener("click", () => {
-        conversation = [];
-        chatEl.innerHTML = "";
-        location.reload();
-      });
 
       inputEl.focus();
     })();
