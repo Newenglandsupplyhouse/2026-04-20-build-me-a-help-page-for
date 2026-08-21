@@ -146,6 +146,14 @@
     .typing i:nth-child(2) { animation-delay: .18s; }
     .typing i:nth-child(3) { animation-delay: .36s; }
     @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+    /* Words appear as they arrive; the caret says "still writing" so a pause
+       mid-reply doesn't read as a finished answer. */
+    .bubble.streaming > :last-child::after {
+      content: ""; display: inline-block; vertical-align: -1px;
+      width: 7px; height: 14px; margin-left: 3px; border-radius: 1px;
+      background: var(--muted); animation: blink 1.1s infinite ease-in-out;
+    }
+    .stream-note { color: var(--muted); font-size: 13px; }
 
     /* Composer */
     footer.composer {
@@ -396,6 +404,48 @@
       });
 
       // ---- send flow ----------------------------------------------------
+      // Does this browser support reading a response body as it arrives? Old ones
+      // fall back to the buffered JSON reply, which the server still returns.
+      const canStream = typeof ReadableStream === "function"
+        && typeof Response === "function"
+        && !!Response.prototype
+        && "body" in Response.prototype;
+
+      // Minimal SSE frame parser — the endpoint sends "delta", then one "done"
+      // carrying the final reply (prose plus any code-owned document block).
+      async function readEventStream(res, onEvent) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        for (;;) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          buffer += decoder.decode(chunk.value, { stream: true });
+
+          let split;
+          while ((split = buffer.indexOf("\n\n")) !== -1) {
+            const frame = buffer.slice(0, split);
+            buffer = buffer.slice(split + 2);
+
+            let name = "message";
+            const dataLines = [];
+            for (const rawLine of frame.split("\n")) {
+              const line = rawLine.replace(/\r$/, "");
+              if (line.startsWith("event:")) name = line.slice(6).trim();
+              else if (line.startsWith("data:")) dataLines.push(line.slice(5).replace(/^ /, ""));
+            }
+            if (!dataLines.length) continue; // ": open" keep-alive comment
+
+            try {
+              onEvent(name, JSON.parse(dataLines.join("\n")));
+            } catch (err) {
+              /* ignore a frame we can't parse rather than drop the whole reply */
+            }
+          }
+        }
+      }
+
       async function send(text) {
         const typed = (text != null ? text : inputEl.value).trim();
         const images = pendingImages.slice();
@@ -422,26 +472,97 @@
         try {
           const res = await fetch("/api/chat", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ conversation, sessionId })
+            headers: {
+              "Content-Type": "application/json",
+              "Accept": canStream ? "text/event-stream" : "application/json"
+            },
+            body: JSON.stringify({ conversation, sessionId, stream: canStream })
           });
-          const data = await res.json().catch(() => ({}));
-          typingEl.remove();
 
-          if (!res.ok || data.error) {
-            // surface friendly server-provided messages (e.g. rate-limit notices) when present
-            const msg = (res.status === 429 && data.error)
-              ? escapeHtml(data.error)
-              : "Sorry — something went wrong reaching the assistant. Please try again in a moment.";
-            addMessage("assistant", `<p>${msg}</p>`);
-            // keep conversation consistent: drop the unanswered user turn
-            conversation.pop();
+          const streaming = res.ok
+            && (res.headers.get("content-type") || "").indexOf("text/event-stream") !== -1;
+
+          // Errors and rate-limit notices still come back as plain JSON, and so does
+          // the whole reply if streaming wasn't negotiated.
+          if (!streaming) {
+            const data = await res.json().catch(() => ({}));
+            typingEl.remove();
+
+            if (!res.ok || data.error) {
+              // surface friendly server-provided messages (e.g. rate-limit notices) when present
+              const msg = (res.status === 429 && data.error)
+                ? escapeHtml(data.error)
+                : "Sorry — something went wrong reaching the assistant. Please try again in a moment.";
+              addMessage("assistant", `<p>${msg}</p>`);
+              // keep conversation consistent: drop the unanswered user turn
+              conversation.pop();
+              return;
+            }
+
+            const reply = data.reply || "No response.";
+            addMessage("assistant", renderMarkdown(reply));
+            conversation.push({ role: "assistant", content: reply });
             return;
           }
 
-          const reply = data.reply || "No response.";
-          addMessage("assistant", renderMarkdown(reply));
-          conversation.push({ role: "assistant", content: reply });
+          let bubble = null;
+          let streamed = "";
+          let finalReply = "";
+          let streamError = "";
+          let repaint = null;
+
+          const paint = () => {
+            repaint = null;
+            if (!bubble) return;
+            bubble.innerHTML = renderMarkdown(streamed);
+            scrollToBottom();
+          };
+
+          try {
+            await readEventStream(res, (name, data) => {
+              if (name === "delta" && data && typeof data.text === "string") {
+                if (!bubble) {
+                  typingEl.remove();
+                  bubble = addMessage("assistant", "");
+                  bubble.classList.add("streaming");
+                }
+                streamed += data.text;
+                // Deltas land far faster than anyone reads; repainting on a short
+                // timer keeps the text flowing without re-rendering per token.
+                if (!repaint) repaint = setTimeout(paint, 60);
+              } else if (name === "done" && data) {
+                finalReply = data.reply || "";
+              } else if (name === "error" && data) {
+                streamError = data.error || "stream error";
+              }
+            });
+          } catch (err) {
+            // Connection dropped part-way; whatever already arrived is kept below.
+            streamError = "connection lost";
+          }
+
+          if (repaint) { clearTimeout(repaint); }
+          typingEl.remove();
+
+          // The server's final reply is authoritative — it carries the document block
+          // that code appends after the prose, which never came through as deltas.
+          const answer = finalReply || streamed;
+
+          if (answer) {
+            if (!bubble) bubble = addMessage("assistant", "");
+            bubble.classList.remove("streaming");
+            bubble.innerHTML = renderMarkdown(answer)
+              + (finalReply ? "" : `<p class="stream-note">That reply was cut off — please ask again.</p>`);
+            scrollToBottom();
+            conversation.push({ role: "assistant", content: answer });
+            return;
+          }
+
+          // Failed before a single word landed: nothing for the customer to keep.
+          addMessage("assistant", streamError
+            ? `<p>Sorry — something went wrong reaching the assistant. Please try again in a moment.</p>`
+            : `<p>No response.</p>`);
+          conversation.pop();
         } catch (err) {
           typingEl.remove();
           addMessage("assistant",

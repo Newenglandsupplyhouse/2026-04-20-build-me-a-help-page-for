@@ -1230,7 +1230,76 @@ function resolveReasoningEffort(config) {
   return REASONING_EFFORTS.includes(raw) ? raw : "low";
 }
 
-async function createOpenAIResponse(conversation, cfg = null) {
+// Read an OpenAI Responses API SSE stream, handing prose deltas to onDelta the moment
+// they arrive and returning the SAME completed payload the buffered call returns — so
+// every downstream consumer (summarizeTools, extractResponseText) is untouched.
+async function consumeResponseStream(openAIResponse, onDelta) {
+  const reader = openAIResponse.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let streamedText = "";
+  let finalPayload = null;
+  let streamError = "";
+
+  const handleFrame = (frame) => {
+    const dataLines = [];
+    for (const rawLine of frame.split("\n")) {
+      const line = rawLine.replace(/\r$/, "");
+      if (line.startsWith("data:")) dataLines.push(line.slice(5).replace(/^ /, ""));
+    }
+    if (!dataLines.length) return;
+    const raw = dataLines.join("\n");
+    if (!raw || raw === "[DONE]") return;
+
+    let event;
+    try {
+      event = JSON.parse(raw);
+    } catch {
+      return; // an unparseable frame isn't worth killing a live reply over
+    }
+
+    if (event.type === "response.output_text.delta" && typeof event.delta === "string") {
+      streamedText += event.delta;
+      onDelta(event.delta);
+      return;
+    }
+    if (event.type === "response.completed" || event.type === "response.incomplete") {
+      finalPayload = event.response || null;
+      return;
+    }
+    if (event.type === "response.failed") {
+      streamError = event.response?.error?.message || "OpenAI request failed.";
+      return;
+    }
+    if (event.type === "error") {
+      streamError = event.message || event.error?.message || "OpenAI stream error.";
+    }
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let split;
+    while ((split = buffer.indexOf("\n\n")) !== -1) {
+      handleFrame(buffer.slice(0, split));
+      buffer = buffer.slice(split + 2);
+    }
+  }
+  if (buffer.trim()) handleFrame(buffer);
+
+  if (streamError) throw new Error(streamError);
+
+  // A stream that ends without response.completed still delivered prose the customer
+  // has already read on screen — keep it rather than erroring out on a visible reply.
+  return finalPayload || { output_text: streamedText, output: [] };
+}
+
+// options.onDelta — when supplied the upstream call streams, and each prose delta is
+// handed over as it lands. options.signal aborts the completion if the customer leaves.
+async function createOpenAIResponse(conversation, cfg = null, options = {}) {
+  const onDelta = typeof options.onDelta === "function" ? options.onDelta : null;
+  const signal = options.signal || undefined;
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error("Missing OPENAI_API_KEY in .env.");
@@ -1290,6 +1359,7 @@ async function createOpenAIResponse(conversation, cfg = null) {
 
   const openAIResponse = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
+    signal,
     headers: {
       "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json"
@@ -1300,6 +1370,9 @@ async function createOpenAIResponse(conversation, cfg = null) {
       input,
       tools,
       include: ["file_search_call.results"],
+      // Streaming changes WHEN the words arrive, not what they are: the completed
+      // payload is reassembled below and every gate downstream still runs on it.
+      ...(onDelta ? { stream: true } : {}),
       // Finding a part in our own catalog is a lookup, not a puzzle. Left at the model's
       // default effort this call burned ~832 of 986 output tokens on hidden reasoning and
       // took ~13s; "low" answers the same question in ~5s. Tunable in /admin if replies
@@ -1311,12 +1384,19 @@ async function createOpenAIResponse(conversation, cfg = null) {
     })
   });
 
-  const payload = await openAIResponse.json();
-
   if (!openAIResponse.ok) {
-    const message = payload?.error?.message || "OpenAI request failed.";
+    let message = "OpenAI request failed.";
+    try {
+      message = (await openAIResponse.json())?.error?.message || message;
+    } catch {
+      // non-JSON upstream error body; the generic message stands
+    }
     throw new Error(message);
   }
+
+  const payload = onDelta
+    ? await consumeResponseStream(openAIResponse, onDelta)
+    : await openAIResponse.json();
 
   return {
     payload,
@@ -1625,6 +1705,15 @@ const server = createServer(async (request, response) => {
   // unused dead code and can be pruned in a follow-up.
 
   if (request.method === "POST" && requestUrl.pathname === "/api/chat") {
+    // Declared outside the try so the catch below knows whether headers already went
+    // out — once the stream is open a failure has to be reported as an SSE event, not
+    // as a 500 the browser will never parse.
+    let sseOpen = false;
+    const sse = (event, data) => {
+      if (!sseOpen || response.writableEnded || response.destroyed) return;
+      response.write("event: " + event + "\ndata: " + JSON.stringify(data) + "\n\n");
+    };
+
     try {
       const cfg = loadConfig();
 
@@ -1654,12 +1743,11 @@ const server = createServer(async (request, response) => {
         return;
       }
 
-      const openAIResponse = await createOpenAIResponse(conversation, cfg);
-      const usedSources = [
-        ...openAIResponse.usedSources,
-        summarizeTools(openAIResponse.payload.output)
-      ].filter(Boolean).join(" and ");
-      const replyText = extractResponseText(openAIResponse.payload);
+      // Streaming is opt-in per request so the buffered JSON contract still works for
+      // anything that hasn't been updated: same {reply, usedTools, documents} shape.
+      const wantsStream = parsed.stream === true
+        || /text\/event-stream/i.test(String(request.headers.accept || ""));
+
       const wantsDocuments = isDocumentRequest(conversation);
 
       // Documents are surfaced ONLY here — the model has no document tool, so it
@@ -1675,21 +1763,59 @@ const server = createServer(async (request, response) => {
       // where the model is still gathering the model number and a not-found note
       // would be premature.
       const namedSpecificModel = /\d{3,}|[a-z]\d|\d[a-z]/i.test(docQuery);
-      let shownDocuments = [];
-      if (wantsDocuments) {
-        const queryTokens = significantQueryTokens(docQuery);
-        const found = await searchDocumentsForQuery(
-          docQuery,
-          process.env.OPENAI_VECTOR_STORE_ID,
-          process.env.OPENAI_API_KEY,
-          process.env.OPENAI_MODEL || "gpt-5-mini",
-          resolveReasoningEffort(cfg)
-        );
-        shownDocuments = found
-          .filter((doc) => (doc.score || 0) >= DOC_SCORE_MIN)
-          .filter((doc) => documentMatchesQuery(doc, queryTokens))
-          .slice(0, 3);
+      // WHICH documents to attach is decided entirely from the customer's message
+      // (isDocumentRequest / documentMatchesQuery), never from the model's reply — so
+      // this lookup has no reason to wait for the model. Started here it overlaps the
+      // main call instead of stacking a second round-trip on top of it, which is what
+      // made document requests roughly twice as slow as ordinary part lookups.
+      const documentsPromise = wantsDocuments
+        ? searchDocumentsForQuery(
+            docQuery,
+            process.env.OPENAI_VECTOR_STORE_ID,
+            process.env.OPENAI_API_KEY,
+            process.env.OPENAI_MODEL || "gpt-5-mini",
+            resolveReasoningEffort(cfg)
+          ).catch(() => [])
+        : Promise.resolve([]);
+
+      // Nothing is written to the socket until the headers below, so rate-limit and
+      // validation rejections above still answer with ordinary JSON.
+      const abort = new AbortController();
+      if (wantsStream) {
+        response.writeHead(200, {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          "Connection": "keep-alive",
+          // Render's proxy buffers responses by default; without this the deltas
+          // arrive in one lump at the end and streaming buys the customer nothing.
+          "X-Accel-Buffering": "no"
+        });
+        sseOpen = true;
+        response.write(": open\n\n");
+        // Customer closed the tab — stop paying for a completion nobody will read.
+        request.on("close", () => {
+          if (!response.writableEnded) abort.abort();
+        });
       }
+
+      const openAIResponse = await createOpenAIResponse(conversation, cfg, wantsStream
+        ? { onDelta: (text) => sse("delta", { text }), signal: abort.signal }
+        : {});
+      const usedSources = [
+        ...openAIResponse.usedSources,
+        summarizeTools(openAIResponse.payload.output)
+      ].filter(Boolean).join(" and ");
+      const replyText = extractResponseText(openAIResponse.payload);
+
+      const shownDocuments = wantsDocuments
+        ? (await documentsPromise)
+            .filter((doc) => (doc.score || 0) >= DOC_SCORE_MIN)
+            .filter((doc) => documentMatchesQuery(doc, significantQueryTokens(docQuery)))
+            .slice(0, 3)
+        : [];
 
       const base = replyText || "No response text returned.";
       // The code owns all document messaging (the model has no doc tool): list the
@@ -1703,18 +1829,38 @@ const server = createServer(async (request, response) => {
         finalReply = `${base}\n\nI'm not finding a document on file that matches that exact model — double-check the model number and I'll take another look.`.trim();
       }
 
-      sendJson(response, 200, {
+      const result = {
         reply: finalReply,
         usedTools: usedSources ? `Used ${usedSources.replace(/^Used /, "")}` : "",
         documents: shownDocuments
-      }, origin);
+      };
+
+      if (wantsStream) {
+        // The document block is code-owned and appended after the prose, so it was
+        // never part of the streamed text — the client re-renders from this reply,
+        // which is byte-identical to what the buffered endpoint would have returned.
+        sse("done", result);
+        response.end();
+      } else {
+        sendJson(response, 200, result, origin);
+      }
       // admin test-mode sessions (TEST- prefix, via /finder?test=1) are not logged to the CRM
       if (!String(parsed.sessionId || "").startsWith("TEST-")) {
         logChatToCrm(conversation, finalReply, usedSources, shownDocuments, parsed.sessionId);
       }
       return;
     } catch (error) {
-      sendJson(response, 500, { error: error.message }, origin);
+      // Aborted because the customer navigated away — nothing left to answer.
+      if (error?.name === "AbortError") {
+        if (!response.writableEnded) response.end();
+        return;
+      }
+      if (sseOpen) {
+        sse("error", { error: error.message });
+        if (!response.writableEnded) response.end();
+      } else {
+        sendJson(response, 500, { error: error.message }, origin);
+      }
       return;
     }
   }
