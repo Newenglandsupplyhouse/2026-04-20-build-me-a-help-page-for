@@ -1097,6 +1097,121 @@ function buildShopifySearchQuery(userText) {
   return (meaningful.length ? meaningful : words).slice(0, 8).join(" ");
 }
 
+// Shopify's Storefront products(query:) ANDs every term and does not reliably stem,
+// so ONE extra or plural word zeroes out an otherwise perfect match: "vent rite vents"
+// returns nothing while "vent rite" returns 8, "taco circulator pumps" returns 1 while
+// "pump" returns 5. That silently turned ordinary phrasing into "we don't carry it".
+// So when a search comes back empty we retry progressively narrower, dropping the
+// least-identifying words first and always keeping part numbers.
+const SHOPIFY_SEARCH_ATTEMPTS = 4;
+
+// Words that describe the ASK rather than the product. They survive the stopword
+// filter (a customer really did type them) but they are never in a product title, so
+// they must not be what a narrowed retry hangs on to.
+const SEARCH_ASK_WORDS = new Set([
+  "part", "parts", "number", "numbers", "model", "models", "replacement",
+  "replacements", "spare", "spares", "item", "items", "product", "products",
+  "unit", "units", "piece", "pieces", "equivalent", "compatible", "version"
+]);
+
+// How identifying is this term? Part codes and model numbers are what actually pin
+// down a product; category words ("valve", "vent", "relay") and ask-words are the
+// first to go.
+function searchTermWeight(term) {
+  const t = term.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (/[a-z]/.test(t) && /\d/.test(t)) return 4; // part code: B1370F, UDX200
+  if (/^\d+$/.test(t)) return 3;                  // model number: 8124
+  if (SEARCH_ASK_WORDS.has(t)) return 0;
+  // Match the singular too, so "vents"/"pumps" are treated as the category words they are.
+  if (GENERIC_TERMS.has(t) || GENERIC_TERMS.has(t.replace(/s$/, ""))) return 1;
+  return 2;                                       // brand or other distinctive word
+}
+
+function buildShopifySearchCandidates(userText) {
+  const primary = buildShopifySearchQuery(userText);
+  if (!primary || primary.includes(":")) {
+    return primary ? [primary] : []; // raw Shopify query syntax passes through untouched
+  }
+
+  const terms = primary.split(" ").filter(Boolean);
+  const candidates = [primary];
+  // Least-identifying terms drop off first; Array.sort is stable, so equally weighted
+  // words keep the order the customer typed them in.
+  const ranked = [...terms].sort((a, b) => searchTermWeight(b) - searchTermWeight(a));
+
+  for (let keep = terms.length - 1; keep >= 1; keep -= 1) {
+    const kept = new Set(ranked.slice(0, keep));
+    const narrowed = terms.filter((term) => kept.has(term)).join(" ");
+    if (narrowed && !candidates.includes(narrowed)) candidates.push(narrowed);
+  }
+
+  return candidates.slice(0, SHOPIFY_SEARCH_ATTEMPTS);
+}
+
+// How many catalog candidates to ASK Shopify for, and how many to actually put in
+// front of the model. Shopify's RELEVANCE sort does not weight a bare model number,
+// so "vent rite 1" ranked the 31/33/35/57/77 vents above the Vent-Rite 1 we stock —
+// with a first:5 window the one product the customer asked for fell off the end and
+// the finder told them we might not carry it. Fetch wide, then re-rank in code.
+const SHOPIFY_SEARCH_CANDIDATES = 20;
+const SHOPIFY_CONTEXT_PRODUCTS = 8;
+
+// The parts of a customer's message that identify WHICH product: bare model numbers
+// ("vent rite 1" -> "1"), alphanumeric part codes ("B1370F", "UDX-200" -> "udx200"),
+// and ordinary words minus the conversational filler.
+function productQueryTokens(userText) {
+  const text = String(userText || "").toLowerCase();
+  const words = text.split(/[^a-z0-9]+/).filter(Boolean);
+  const codes = new Set(words.filter((w) => /[a-z]/.test(w) && /\d/.test(w)));
+  // "udx-200" / "udx 200" split into two tokens above; keep the joined form too.
+  for (const match of text.matchAll(/[a-z]{2,}[-\s]?\d{2,}[a-z0-9]*/g)) {
+    codes.add(match[0].replace(/[-\s]+/g, ""));
+  }
+  return {
+    numbers: words.filter((w) => /^\d+$/.test(w)),
+    codes: [...codes],
+    words: words.filter((w) => /^[a-z]{3,}$/.test(w) && !SEARCH_STOPWORDS.has(w))
+  };
+}
+
+function scoreProductForQuery(product, tokens) {
+  const title = String(product.title || "").toLowerCase();
+  const titleTokens = new Set(title.split(/[^a-z0-9]+/).filter(Boolean));
+  const squishedTitle = title.replace(/[^a-z0-9]+/g, "");
+
+  const wordHits = tokens.words.filter((w) => titleTokens.has(w)).length;
+  let score = wordHits * 3;
+
+  for (const code of tokens.codes) {
+    if (titleTokens.has(code) || squishedTitle.includes(code)) score += 100;
+  }
+
+  // A bare number is the strongest signal available when it IS the model ("1"), and
+  // pure noise when it is a quantity ("I need 2 gas valves"). Only trust it on a
+  // product that already matched a word from the message, so the number breaks ties
+  // inside the right family instead of dragging in an unrelated "1/2 inch" listing.
+  // Matched as a whole token, so "1" never matches the "31" vent.
+  if (wordHits > 0 || !tokens.words.length) {
+    for (const number of tokens.numbers) {
+      if (titleTokens.has(number)) score += 100;
+    }
+  }
+
+  return score;
+}
+
+// Re-rank Shopify's candidates by how well each title matches what the customer
+// actually named, keeping Shopify's own order as the tiebreak so an ordinary query
+// with nothing to match on comes back exactly as it does today.
+function rankProductsForQuery(products, userText, limit) {
+  const tokens = productQueryTokens(userText);
+  return products
+    .map((product, index) => ({ product, index, score: scoreProductForQuery(product, tokens) }))
+    .sort((a, b) => (b.score - a.score) || (a.index - b.index))
+    .slice(0, limit)
+    .map((entry) => entry.product);
+}
+
 async function getShopifyProductContext(conversation) {
   const storeDomain = process.env.SHOPIFY_STORE_DOMAIN;
   const storefrontToken = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN;
@@ -1107,7 +1222,8 @@ async function getShopifyProductContext(conversation) {
   }
 
   const latestUserMessage = getLatestUserMessage(conversation);
-  const searchQuery = buildShopifySearchQuery(latestUserMessage);
+  const searchCandidates = buildShopifySearchCandidates(latestUserMessage);
+  const searchQuery = searchCandidates[0];
   if (!searchQuery) {
     return null;
   }
@@ -1115,7 +1231,7 @@ async function getShopifyProductContext(conversation) {
   const endpoint = `https://${storeDomain}/api/${apiVersion}/graphql.json`;
   const graphQLQuery = `
     query HelpPageProducts($query: String!) {
-      products(first: 5, query: $query, sortKey: RELEVANCE) {
+      products(first: ${SHOPIFY_SEARCH_CANDIDATES}, query: $query, sortKey: RELEVANCE) {
         nodes {
           id
           title
@@ -1150,31 +1266,45 @@ async function getShopifyProductContext(conversation) {
     }
   `;
 
-  const shopifyResponse = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Storefront-Access-Token": storefrontToken
-    },
-    body: JSON.stringify({
-      query: graphQLQuery,
-      variables: {
-        query: searchQuery
-      }
-    })
-  });
+  const runSearch = async (term) => {
+    const shopifyResponse = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Storefront-Access-Token": storefrontToken
+      },
+      body: JSON.stringify({
+        query: graphQLQuery,
+        variables: {
+          query: term
+        }
+      })
+    });
 
-  const payload = await shopifyResponse.json();
+    const payload = await shopifyResponse.json();
 
-  if (!shopifyResponse.ok) {
-    throw new Error(payload?.errors?.[0]?.message || "Shopify Storefront API request failed.");
+    if (!shopifyResponse.ok) {
+      throw new Error(payload?.errors?.[0]?.message || "Shopify Storefront API request failed.");
+    }
+
+    if (payload.errors?.length) {
+      throw new Error(payload.errors[0].message || "Shopify Storefront API returned an error.");
+    }
+
+    return payload?.data?.products?.nodes || [];
+  };
+
+  // Each retry is only reached when the previous one found nothing, so the common
+  // case is still exactly one Shopify round-trip (~0.2s).
+  let matched = [];
+  let usedQuery = searchQuery;
+  for (const candidate of searchCandidates) {
+    matched = await runSearch(candidate);
+    usedQuery = candidate;
+    if (matched.length) break;
   }
 
-  if (payload.errors?.length) {
-    throw new Error(payload.errors[0].message || "Shopify Storefront API returned an error.");
-  }
-
-  const products = payload?.data?.products?.nodes || [];
+  const products = rankProductsForQuery(matched, latestUserMessage, SHOPIFY_CONTEXT_PRODUCTS);
   if (!products.length) {
     return {
       source: "shopify",
@@ -1184,7 +1314,7 @@ async function getShopifyProductContext(conversation) {
   }
 
   const lines = [
-    `Live Shopify product search results for "${latestUserMessage}" using query "${searchQuery}":`
+    `Live Shopify product search results for "${latestUserMessage}" using query "${usedQuery}":`
   ];
 
   for (const product of products) {
@@ -1213,7 +1343,7 @@ async function getShopifyProductContext(conversation) {
 
   return {
     source: "shopify",
-    searchQuery,
+    searchQuery: usedQuery,
     text: lines.join("\n")
   };
 }
