@@ -1103,7 +1103,19 @@ function buildShopifySearchQuery(userText) {
 // "pump" returns 5. That silently turned ordinary phrasing into "we don't carry it".
 // So when a search comes back empty we retry progressively narrower, dropping the
 // least-identifying words first and always keeping part numbers.
-const SHOPIFY_SEARCH_ATTEMPTS = 4;
+const SHOPIFY_SEARCH_ATTEMPTS = 5;
+
+// Narrowing one word at a time never reaches the useful end of a long question: a
+// six-term query would stop at three terms and still find nothing. Step down fast
+// instead — drop one, then halve, then the best two, then the single most
+// identifying term — so even a chatty sentence gets tried as its core terms.
+function searchAttemptSizes(termCount) {
+  const sizes = [];
+  for (const size of [termCount - 1, Math.ceil(termCount / 2), 2, 1]) {
+    if (size >= 1 && size < termCount && !sizes.includes(size)) sizes.push(size);
+  }
+  return sizes;
+}
 
 // Words that describe the ASK rather than the product. They survive the stopword
 // filter (a customer really did type them) but they are never in a product title, so
@@ -1111,7 +1123,15 @@ const SHOPIFY_SEARCH_ATTEMPTS = 4;
 const SEARCH_ASK_WORDS = new Set([
   "part", "parts", "number", "numbers", "model", "models", "replacement",
   "replacements", "spare", "spares", "item", "items", "product", "products",
-  "unit", "units", "piece", "pieces", "equivalent", "compatible", "version"
+  "unit", "units", "piece", "pieces", "equivalent", "compatible", "version",
+  // What the customer wants DONE, and when. None of these appear in a product
+  // title, but they are ordinary words, so without this they outrank the category
+  // word they sit next to: "can you hold a vent rite 1 for pickup tomorrow" kept
+  // "hold"/"pickup"/"tomorrow" and dropped "vent", and found nothing.
+  "hold", "holds", "reserve", "reserved", "pickup", "pick", "order", "orders",
+  "ordering", "buy", "purchase", "quote", "price", "prices", "pricing", "cost",
+  "ship", "shipped", "shipping", "deliver", "delivery", "today", "tomorrow",
+  "tonight", "available", "availability", "cheapest", "cheap"
 ]);
 
 // How identifying is this term? Part codes and model numbers are what actually pin
@@ -1139,7 +1159,7 @@ function buildShopifySearchCandidates(userText) {
   // words keep the order the customer typed them in.
   const ranked = [...terms].sort((a, b) => searchTermWeight(b) - searchTermWeight(a));
 
-  for (let keep = terms.length - 1; keep >= 1; keep -= 1) {
+  for (const keep of searchAttemptSizes(terms.length)) {
     const kept = new Set(ranked.slice(0, keep));
     const narrowed = terms.filter((term) => kept.has(term)).join(" ");
     if (narrowed && !candidates.includes(narrowed)) candidates.push(narrowed);
