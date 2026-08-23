@@ -294,7 +294,7 @@
       <h1>Security <span class="tool-badge" data-tool-name></span></h1>
       <div class="sub">Abuse protection — this page was bot-scraped once. Normal customers never hit these caps. (Chatbase's setting was 20 messages per 240s.)</div>
       <div class="card">
-        <div class="note">These two numbers are saved with the <b data-tool-name></b>, but <b>both finders share one message counter</b> — messages sent to the other finder also count toward this daily cap. Setting the daily cap to 0 pauses this finder only.</div>
+        <div class="note">These two numbers apply to the <b data-tool-name></b> only — it keeps its own daily count, so the other finder's traffic can't use it up. The <b>per-visitor minute limit is shared</b>, so one person switching between the two finders still gets this many messages a minute in total. Setting the daily cap to 0 pauses this finder only.</div>
         <div class="row">
           <div>
             <label>Max messages per visitor per minute</label>
@@ -421,7 +421,11 @@
         c = await r.json();
         if (c && c.error) throw new Error(c.error);
         if (!c || typeof c.instructions !== "string") throw new Error("unexpected response");
-        if (c._tool && c._tool !== t) throw new Error("server returned the " + (isTool(c._tool) ? TOOLS[c._tool].name : c._tool) + " config");
+        // Strict for lamp: an older server that predates per-tool configs sends no _tool
+        // and would answer /admin/api/config?tool=lamp with the HVAC config, which the
+        // panel would then label as the lamp's and overwrite on save. hvac stays lenient
+        // because its request carries no query string and is what such a server returns.
+        if (t !== "hvac" && c._tool !== t) throw new Error("this server doesn't support the " + TOOLS[t].name + " yet — reload the page");
       } catch (e) {
         if (seq !== cfgSeq) return false;   // superseded — stay silent, the newer load owns the UI
         setBusy(false); throw e;
@@ -434,16 +438,25 @@
       if (busy) return flash("Still loading — try again in a second.", false);
       if (!loadedTool) return flash("Settings haven't loaded yet.", false);
       const t = loadedTool;                 // save where the fields came from, not where the radio points
+      // Snapshot what we are ABOUT to send. Marking clean from the DOM when the response
+      // lands would count anything typed during the round-trip as already saved, and the
+      // switch would then discard it without asking.
+      const sentSnapshot = section ? SNAP[section]() : null;
       try {
         const r = await fetch(cfgUrl(t), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(partial) });
         if (!r.ok) throw new Error((await r.json()).error || r.status);
         const saved = await r.json();
         if (saved._tool && saved._tool !== t) throw new Error("saved to the wrong tool — reload the page before editing again");
-        if (loadedTool === t) { cfg = saved; if (section) markClean(section); }
+        if (loadedTool === t) { cfg = saved; if (section) clean[section] = sentSnapshot; }
         flash("Saved to the " + TOOLS[t].name + " ✓");
       } catch (e) { flash("Save failed (" + TOOLS[t].name + "): " + e.message, false); }
     }
     function savePlayground() {
+      // An empty prompt is NOT saved as empty: saveConfig substitutes the built-in SEED
+      // (finder-config.mjs), not the previous value. Clearing the box and saving would
+      // therefore destroy a customised prompt with no backup and no version history,
+      // while flashing "Saved". Refuse instead.
+      if (!el("instructions").value.trim()) return flash("The prompt can't be empty — the agent would fall back to the built-in default.", false);
       save({ instructions: el("instructions").value, model: el("model").value, enableWebSearch: el("enableWebSearch").checked }, "playground");
     }
     function saveSecurity() {
@@ -507,6 +520,10 @@
     function addChip() { const c = readChips(true); c.push({ label: "", sub: "", q: "" }); renderChips(c); }
     function saveInterface() {
       const chips = readChips();
+      // A half-typed row is dropped from the payload but WOULD stay in the dirty snapshot,
+      // so it would look saved and then vanish on the next tool switch with no warning.
+      // Make the operator finish or delete it instead of silently discarding their typing.
+      if (readChips(true).length !== chips.length) return flash("Finish or remove the incomplete suggestion chip — it needs both a label and a question.", false);
       if (!chips.length && ((cfg && cfg.chips) || []).length
           && !confirm("This removes all suggestion chips from the " + TOOLS[shownTool()].name + " page. Save anyway?")) return;
       save({ welcomeHeading: el("welcomeHeading").value, welcomeText: el("welcomeText").value, placeholder: el("placeholder").value, chips }, "interface");

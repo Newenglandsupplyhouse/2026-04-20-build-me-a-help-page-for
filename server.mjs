@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig, saveConfig, checkLimits, resolveTool, isTool, TOOLS } from "./finder-config.mjs";
+import { loadConfig, saveConfig, checkLimits, overDailyCap, resolveTool, isTool, TOOLS } from "./finder-config.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1597,7 +1597,11 @@ function renderFinderPage(template, cfg, tool = "hvac") {
     .replace("__CFG_WELCOME__", escapeHtmlServer(cfg.welcomeText))
     .replace("__CFG_PLACEHOLDER__", escapeHtmlServer(cfg.placeholder))
     .replace("__CFG_CHIPS__", chipsHtml)
-    .replace(/__CFG_TOOL__/g, escapeHtmlServer(tool));
+    .replace(/__CFG_TOOL__/g, escapeHtmlServer(tool))
+    // The <title> is what the browser tab, a bookmark and a share preview show.
+    // It was a hardcoded HVAC string, so /lamp-finder announced itself as the HVAC tool.
+    .replace("__CFG_TITLE__", escapeHtmlServer(
+      tool === "lamp" ? "Projector Lamp Finder" : "HVAC Parts & Diagnostic Assistant"));
 }
 
 // Admin gate (HTTP Basic, username blank). Locked in the cloud until ADMIN_PASSWORD is set;
@@ -1895,7 +1899,7 @@ const server = createServer(async (request, response) => {
       // Abuse protection: per-IP per-minute + global daily caps (this page has been bot-scraped).
       const ip = (request.headers["x-forwarded-for"] || "").split(",")[0].trim()
         || request.socket.remoteAddress || "unknown";
-      const rejection = checkLimits(ip, cfg);
+      const rejection = checkLimits(ip, cfg, tool);
       if (rejection) {
         sendJson(response, rejection.status, { error: rejection.message }, origin);
         return;
@@ -1918,10 +1922,20 @@ const server = createServer(async (request, response) => {
         return;
       }
 
-      // The body is authoritative for which tool is answering.
+      // The body is authoritative for which tool is answering. When it disagrees with the
+      // query string the rate-limit gate above ran against the wrong config, so re-check
+      // the daily cap for the tool that will actually answer — otherwise a hand-rolled
+      // POST could name hvac in the URL and lamp in the body to slip past a lamp pause.
       if (parsed.tool) {
         const fromBody = resolveTool(parsed.tool);
-        if (fromBody !== tool) { tool = fromBody; cfg = loadConfig(tool); }
+        if (fromBody !== tool) {
+          tool = fromBody;
+          cfg = loadConfig(tool);
+          if (overDailyCap(cfg, tool)) {
+            sendJson(response, 429, { error: "The parts finder has reached its daily usage limit. Please try again tomorrow or contact us directly." }, origin);
+            return;
+          }
+        }
       }
 
       // Streaming is opt-in per request so the buffered JSON contract still works for

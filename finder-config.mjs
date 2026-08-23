@@ -299,21 +299,33 @@ export function configInfo(tool = "hvac") {
 }
 
 // ---- request limits (in-memory; reset on redeploy, which is fine for abuse protection) ----
-const ipHits = new Map();   // ip -> [timestamps]
-let dayCount = { day: "", count: 0 };
+// Per-IP stays GLOBAL across tools on purpose: "max messages per visitor per minute" is
+// abuse protection, and keying it per tool would let a scraper double its allowance by
+// alternating /finder and /lamp-finder.
+const ipHits = new Map();       // ip -> [timestamps]
+// The daily cap is PER TOOL. It used to be one shared counter compared against whichever
+// tool's threshold happened to be asking, so lamp traffic could exhaust the HVAC finder's
+// budget and take the storefront tool offline for the rest of the day.
+const dayCounts = new Map();    // tool -> { day, count }
 
 function etDay() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
 // Returns null if allowed, or a {status, message} rejection.
-export function checkLimits(ip, config) {
+function dayBucket(tool) {
+  const today = etDay();
+  let d = dayCounts.get(tool);
+  if (!d || d.day !== today) { d = { day: today, count: 0 }; dayCounts.set(tool, d); }
+  return d;
+}
+
+export function checkLimits(ip, config, tool = "hvac") {
   // 0 is a legitimate value (acts as a kill switch), so don't || away falsy numbers
   const dailyCap = typeof config.dailyCap === "number" ? config.dailyCap : 400;
   const perMin = typeof config.rateLimitPerMin === "number" ? config.rateLimitPerMin : 8;
-  const today = etDay();
-  if (dayCount.day !== today) dayCount = { day: today, count: 0 };
-  if (dayCount.count >= dailyCap) {
+  const d = dayBucket(tool);
+  if (d.count >= dailyCap) {
     return { status: 429, message: "The parts finder has reached its daily usage limit. Please try again tomorrow or contact us directly." };
   }
   const now = Date.now();
@@ -323,7 +335,21 @@ export function checkLimits(ip, config) {
   }
   hits.push(now);
   ipHits.set(ip, hits);
-  dayCount.count++;
+  d.count++;
   if (ipHits.size > 5000) ipHits.clear(); // memory guard against IP churn
   return null;
+}
+
+// Re-check the daily cap after the request body has told us which tool is really
+// answering. The gate above has to run before the body is read, so a POST that names
+// one tool in the query string and another in the body would otherwise be metered
+// against the wrong cap — including slipping past a deliberate 0 kill switch.
+//
+// `>=`, not `>`: counters are per tool, so checkLimits counted this request against the
+// QUERY-STRING tool, never against `tool`. Its own count is therefore still pre-request,
+// and `0 >= 0` is what makes a dailyCap of 0 actually pause the tool it names.
+// Only reached when the two disagree; a normal request never takes this path.
+export function overDailyCap(config, tool) {
+  const cap = typeof config.dailyCap === "number" ? config.dailyCap : 400;
+  return dayBucket(tool).count >= cap;
 }
