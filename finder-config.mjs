@@ -253,8 +253,16 @@ const PROFILES = {
 };
 
 export const TOOLS = Object.keys(PROFILES);
+// hasOwnProperty, not a bare lookup: PROFILES["__proto__"] and PROFILES["constructor"]
+// are truthy inherited values, so a bare check let those two strings through as if they
+// were real tool names and blew up path.join downstream.
+export function isTool(name) {
+  return Object.prototype.hasOwnProperty.call(PROFILES, String(name || "").toLowerCase());
+}
+// Fails OPEN to hvac on purpose: an odd value on /api/chat must still answer the
+// customer. The admin WRITE path must not accept it — it rejects with a 400 instead.
 export function resolveTool(name) {
-  return PROFILES[String(name || "").toLowerCase()] ? String(name).toLowerCase() : "hvac";
+  return isTool(name) ? String(name).toLowerCase() : "hvac";
 }
 function profile(tool) {
   return PROFILES[resolveTool(tool)];

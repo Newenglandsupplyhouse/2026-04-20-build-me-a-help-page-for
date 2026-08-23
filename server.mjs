@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig, saveConfig, checkLimits, resolveTool } from "./finder-config.mjs";
+import { loadConfig, saveConfig, checkLimits, resolveTool, isTool, TOOLS } from "./finder-config.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1772,9 +1772,19 @@ const server = createServer(async (request, response) => {
     // ?tool=lamp manages the Projector Lamp Finder's config; no query string
     // keeps the existing HVAC behaviour byte-for-byte.
     if (requestUrl.pathname === "/admin/api/config") {
-      const cfgTool = resolveTool(requestUrl.searchParams.get("tool"));
+      const rawTool = requestUrl.searchParams.get("tool");
+      // resolveTool fails open to hvac, which is right for /api/chat but wrong here:
+      // a typo like ?tool=lamps would silently merge a lamp edit into the live HVAC
+      // config, with the panel reporting success. Reject instead.
+      if (rawTool !== null && !isTool(rawTool)) {
+        sendJson(response, 400, { error: `Unknown tool "${rawTool}". Expected one of: ${TOOLS.join(", ")}.` }, origin);
+        return;
+      }
+      const cfgTool = resolveTool(rawTool);
+      // _tool lets the panel assert it read/wrote the profile it meant to. It is not in
+      // the PUT allow-list below, so it can never be persisted into a config file.
       if (request.method === "GET") {
-        sendJson(response, 200, loadConfig(cfgTool), origin);
+        sendJson(response, 200, { ...loadConfig(cfgTool), _tool: cfgTool }, origin);
         return;
       }
       if (request.method === "PUT") {
@@ -1784,7 +1794,7 @@ const server = createServer(async (request, response) => {
             "placeholder", "chips", "rateLimitPerMin", "dailyCap"];
           const partial = {};
           for (const k of allowed) if (body[k] !== undefined) partial[k] = body[k];
-          sendJson(response, 200, saveConfig(partial, cfgTool), origin);
+          sendJson(response, 200, { ...saveConfig(partial, cfgTool), _tool: cfgTool }, origin);
         } catch (error) {
           sendJson(response, 400, { error: error.message }, origin);
         }

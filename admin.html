@@ -58,6 +58,33 @@
     button.danger { color: var(--red); border-color: #4a2a2a; }
     .toggle { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 13.5px; }
 
+    /* ---------- tool profiles ---------- */
+    /* --tool is deliberately NOT --accent: only tool-scoped chrome recolours, so the
+       shared Activity/Analytics surfaces stay blue and never imply per-tool data.
+       hvac's --tool === --accent, so the HVAC screen looks exactly as it did. */
+    :root { --tool: #4f7cff; --tool-hover: #3c67e6; --tool-ink: #fff; --tool-soft: #182146; --tool-line: #2f3d6e; }
+    body[data-tool="lamp"] { --tool: #e0a13a; --tool-hover: #cf9128; --tool-ink: #1a1206; --tool-soft: #2a2010; --tool-line: #5a4318; }
+
+    .toolsw { margin: 0 0 14px; }
+    .toolsw .cap { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: #55565f; padding: 0 10px 6px; }
+    .toolsw-seg { display: flex; flex-direction: column; gap: 2px; padding: 3px; background: #0e0e13; border: 1px solid var(--border); border-radius: 10px; }
+    .toolsw-opt { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 8px; color: var(--muted); font: inherit; font-size: 12.5px; line-height: 1.35; padding: 8px 9px; cursor: pointer; }
+    .toolsw-opt:hover { color: var(--text); background: #14141a; }
+    .toolsw-opt .mark { flex: 0 0 auto; width: 11px; height: 11px; margin-top: 3px; border-radius: 50%; border: 1.5px solid #3a3a46; }
+    .toolsw-opt b { font-weight: 600; }
+    .toolsw-opt i { display: block; font-style: normal; font-size: 11px; color: #6d6f7a; margin-top: 2px; }
+    .toolsw-opt.on { color: var(--text); background: var(--tool-soft); box-shadow: inset 0 0 0 1px var(--tool-line); }
+    .toolsw-opt.on .mark { border-color: var(--tool); background: var(--tool); box-shadow: 0 0 8px -1px var(--tool); }
+    .toolsw.busy { pointer-events: none; opacity: .5; }
+
+    .tool-badge { display: inline-block; vertical-align: 3px; margin-left: 9px; background: var(--tool-soft); color: var(--tool); border: 1px solid var(--tool-line); border-radius: 999px; padding: 3px 10px; font-size: 11.5px; font-weight: 600; }
+    button.primary.commit { background: var(--tool); color: var(--tool-ink); }
+    button.primary.commit:hover { background: var(--tool-hover); }
+    button.primary[disabled], button.small[disabled] { opacity: .45; cursor: not-allowed; }
+    .note { background: var(--panel-2); border: 1px solid var(--border); border-left: 3px solid var(--tool); border-radius: 10px; padding: 10px 12px; margin: 0 0 14px; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+    .note.plain { border-left-color: var(--border); }
+    .note b { color: var(--text); font-weight: 600; }
+
     /* playground */
     .playground { display: grid; grid-template-columns: minmax(380px, 1fr) minmax(360px, 480px); gap: 16px; align-items: start; }
     .preview-frame { position: sticky; top: 0; }
@@ -112,6 +139,19 @@
 <body>
   <aside>
     <div class="brand"><span class="dot"></span> Parts Finder</div>
+
+    <div class="toolsw" id="toolsw" role="radiogroup" aria-label="Which finder you are editing">
+      <div class="cap">You are editing</div>
+      <div class="toolsw-seg">
+        <button type="button" class="toolsw-opt" data-tool="hvac" role="radio" aria-checked="true">
+          <span class="mark"></span><span><b>AI HVAC Parts Finder</b><i>/finder</i></span>
+        </button>
+        <button type="button" class="toolsw-opt" data-tool="lamp" role="radio" aria-checked="false">
+          <span class="mark"></span><span><b>AI Projector Lamp Finder</b><i>/lamp-finder</i></span>
+        </button>
+      </div>
+    </div>
+
     <nav id="nav">
       <a href="#playground" data-s="playground">▶ Playground</a>
       <a href="#activity" data-s="activity">🕘 Activity</a>
@@ -121,7 +161,8 @@
       <a href="#security" data-s="security">🛡 Security</a>
     </nav>
     <div class="foot">
-      <a href="/finder" target="_blank">Live finder ↗</a><br>
+      <a href="/finder" target="_blank">AI HVAC Parts Finder ↗</a><br>
+      <a href="/lamp-finder" target="_blank">AI Projector Lamp Finder ↗</a><br>
       <a href="https://nesh-crm.onrender.com" target="_blank">NESH CRM ↗</a><br>
       Daily transcript email at 7am ET
     </div>
@@ -130,8 +171,8 @@
   <main>
     <!-- ============ PLAYGROUND ============ -->
     <section id="playground">
-      <h1>Playground</h1>
-      <div class="sub">Tune the agent and try it live. The preview runs the real engine in test mode — chats here aren't logged.</div>
+      <h1>Playground <span class="tool-badge" data-tool-name></span></h1>
+      <div class="sub">Tune the <b data-tool-name></b> and try it live. The preview runs the real engine in test mode — chats here aren't logged.</div>
       <div class="playground">
         <div>
           <div class="card">
@@ -152,15 +193,16 @@
           </div>
           <div class="card">
             <h2>Instructions (system prompt)</h2>
-            <p class="hint">Ported from your Chatbase "Base Instructions". Saves apply to the next message — test in the preview →</p>
+            <div class="note">This is the system prompt for the <b data-tool-name></b> only (<span data-tool-path></span>). The other finder has its own separate prompt — switch on the left to edit it. <b>Saving here never touches the other one.</b></div>
+            <p class="hint">Saves apply to the next message — test in the preview →</p>
             <textarea id="instructions" rows="22"></textarea>
           </div>
-          <button class="primary" onclick="savePlayground()">Save to agent</button>
+          <button class="primary commit" id="save-playground" onclick="savePlayground()">Save to the HVAC agent</button>
         </div>
         <div class="preview-frame">
           <div class="preview-bar">
-            <span>Live preview (test mode)</span>
-            <button class="small" onclick="document.getElementById('preview').src='/finder?test=1&r='+Date.now()">↻ Reload preview</button>
+            <span id="preview-label">AI HVAC Parts Finder — live preview (test mode)</span>
+            <button class="small" onclick="reloadPreview()">↻ Reload preview</button>
           </div>
           <iframe id="preview" src="/finder?test=1"></iframe>
         </div>
@@ -171,6 +213,7 @@
     <section id="activity">
       <h1>Chat logs</h1>
       <div class="sub">Every customer conversation, straight from the CRM. Test-mode chats are excluded.</div>
+      <div class="note plain">These are the chats from <b>both finders together</b>. The log does not record which tool answered, so HVAC and projector-lamp conversations appear here mixed and cannot be separated. The switch on the left changes what you <b>edit</b>, not what you see here.</div>
       <div class="activity-bar">
         <input type="date" id="log-day">
         <button class="small" onclick="loadLogs(true)">Filter day</button>
@@ -187,6 +230,7 @@
     <section id="analytics">
       <h1>Analytics</h1>
       <div class="sub">Live counts from your own data — no plan gates.</div>
+      <div class="note plain">Combined totals for <b>both finders</b>. The chat log doesn't record which tool answered, so these numbers can't be broken out per tool.</div>
       <div class="stats">
         <div class="stat"><div class="k">Conversations (7 days)</div><div class="v" id="st-c7">–</div></div>
         <div class="stat"><div class="k">Messages (7 days)</div><div class="v" id="st-m7">–</div></div>
@@ -207,12 +251,14 @@
     <section id="knowledge">
       <h1>Knowledge base</h1>
       <div class="sub">The manuals the agent searches — your own OpenAI vector store. No 20&nbsp;MB cap here.</div>
+      <div class="note plain">One shared library, not one per tool. Only the <b>AI HVAC Parts Finder</b> searches it — the Projector Lamp Finder has documents turned off and never reads these files.</div>
+      <div class="note plain" id="kb-lamp-note" style="display:none">You are editing the <b>AI Projector Lamp Finder</b>, so these files are read-only here. Switch to the <b>AI HVAC Parts Finder</b> on the left to add or delete documents.</div>
       <div class="card">
         <h2>Add a quick note</h2>
         <p class="hint">Text the agent should know — a policy, a cross-reference, a correction. Saved as a document in the knowledge base.</p>
         <input type="text" id="snip-title" placeholder="Title, e.g. capacitor-strap-brackets">
         <textarea id="snip-body" rows="4" placeholder="e.g. We stock universal round-capacitor strap brackets for 1.75–2.0 inch cans; SKU UB-STRAP-2, $6.95."></textarea>
-        <button class="primary" onclick="addSnippet()">Add to knowledge base</button>
+        <button class="primary" id="kb-add-note" onclick="addSnippet()">Add to knowledge base</button>
       </div>
       <div class="card">
         <h2>Documents <span id="kb-usage" style="color:var(--muted);font-size:12px;font-weight:400;margin-left:8px"></span></h2>
@@ -220,14 +266,14 @@
         <input type="text" id="kb-filter" placeholder="Filter files by name…" oninput="filterKb()" style="margin-bottom:10px">
         <div id="kb-list" style="margin-bottom:10px; max-height: 420px; overflow-y: auto;">Loading…</div>
         <input type="file" id="kb-upload" accept=".pdf,.txt,.docx,.md" style="display:none" onchange="uploadKb(this.files[0])">
-        <button class="small" onclick="el('kb-upload').click()">⬆ Upload document</button>
+        <button class="small" id="kb-upload-btn" onclick="el('kb-upload').click()">⬆ Upload document</button>
       </div>
     </section>
 
     <!-- ============ INTERFACE ============ -->
     <section id="interface">
-      <h1>Chat interface</h1>
-      <div class="sub">What customers see on the finder page before they type.</div>
+      <h1>Chat interface <span class="tool-badge" data-tool-name></span></h1>
+      <div class="sub">What customers see on the <b data-tool-name></b> page (<span data-tool-path></span>) before they type.</div>
       <div class="card">
         <label>Heading</label>
         <input type="text" id="welcomeHeading">
@@ -239,15 +285,16 @@
         <div id="chips"></div>
         <button class="small" onclick="addChip()">+ Add chip</button>
         <br>
-        <button class="primary" onclick="saveInterface()">Save chat interface</button>
+        <button class="primary commit" id="save-interface" onclick="saveInterface()">Save the HVAC chat interface</button>
       </div>
     </section>
 
     <!-- ============ SECURITY ============ -->
     <section id="security">
-      <h1>Security</h1>
+      <h1>Security <span class="tool-badge" data-tool-name></span></h1>
       <div class="sub">Abuse protection — this page was bot-scraped once. Normal customers never hit these caps. (Chatbase's setting was 20 messages per 240s.)</div>
       <div class="card">
+        <div class="note">These two numbers are saved with the <b data-tool-name></b>, but <b>both finders share one message counter</b> — messages sent to the other finder also count toward this daily cap. Setting the daily cap to 0 pauses this finder only.</div>
         <div class="row">
           <div>
             <label>Max messages per visitor per minute</label>
@@ -258,7 +305,7 @@
             <input type="number" id="dailyCap" min="0" max="100000">
           </div>
         </div>
-        <button class="primary" onclick="save({rateLimitPerMin: +el('rateLimitPerMin').value, dailyCap: +el('dailyCap').value})">Save limits</button>
+        <button class="primary commit" id="save-security" onclick="saveSecurity()">Save the HVAC limits</button>
       </div>
     </section>
   </main>
@@ -269,6 +316,22 @@
     "use strict";
     const el = (id) => document.getElementById(id);
     let cfg = null, logsCache = null;
+
+    /* ---------- tool profiles ----------
+       selectedTool = what the switcher shows / what we are fetching.
+       loadedTool   = the tool the form fields actually hold. ALL saves target this,
+                      never the widget, so a mid-flight switch cannot cross-write.  */
+    const TOOLS = {
+      hvac: { name: "AI HVAC Parts Finder",     short: "HVAC", path: "/finder" },
+      lamp: { name: "AI Projector Lamp Finder", short: "Lamp", path: "/lamp-finder" },
+    };
+    // hasOwnProperty, not a bare lookup: TOOLS["__proto__"] and TOOLS["constructor"]
+    // are truthy inherited values and would sail through a plain truthiness check.
+    const isTool = (t) => Object.prototype.hasOwnProperty.call(TOOLS, String(t || ""));
+    let selectedTool = "hvac", loadedTool = null, cfgSeq = 0, busy = false;
+    const shownTool = () => loadedTool || selectedTool;
+    // hvac deliberately sends NO query string — byte-for-byte the request made today.
+    const cfgUrl = (t) => "/admin/api/config" + (t === "hvac" ? "" : "?tool=" + encodeURIComponent(t));
 
     /* ---------- routing ---------- */
     function route() {
@@ -287,30 +350,133 @@
     }
     function esc(s) { return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
-    /* ---------- config ---------- */
-    async function loadCfg() {
-      cfg = await fetch("/admin/api/config").then((r) => r.json());
-      el("instructions").value = cfg.instructions || "";
-      el("model").value = cfg.model || "";
-      el("enableWebSearch").checked = !!cfg.enableWebSearch;
-      el("welcomeHeading").value = cfg.welcomeHeading || "";
-      el("welcomeText").value = cfg.welcomeText || "";
-      el("placeholder").value = cfg.placeholder || "";
-      el("rateLimitPerMin").value = cfg.rateLimitPerMin ?? 8;
-      el("dailyCap").value = cfg.dailyCap ?? 400;
-      renderChips(cfg.chips || []);
+    /* ---------- unsaved-edit tracking (one snapshot per save button) ----------
+       Diffed against the snapshot, never against `cfg`: save() replaces `cfg` wholesale
+       without repainting the form, so a cfg-based check would report "clean" for edits
+       that are still on screen and let the switch destroy them. */
+    const SNAP = {
+      playground: () => JSON.stringify([el("instructions").value, el("model").value, el("enableWebSearch").checked]),
+      interface:  () => JSON.stringify([el("welcomeHeading").value, el("welcomeText").value, el("placeholder").value, readChips(true)]),
+      security:   () => JSON.stringify([el("rateLimitPerMin").value, el("dailyCap").value]),
+    };
+    const SECTION_LABEL = { playground: "Playground", interface: "Chat Interface", security: "Security" };
+    const clean = {};
+    function markClean(sec) { (sec ? [sec] : Object.keys(SNAP)).forEach((k) => { clean[k] = SNAP[k](); }); }
+    function dirtySections() { return Object.keys(SNAP).filter((k) => clean[k] !== undefined && clean[k] !== SNAP[k]()); }
+    window.addEventListener("beforeunload", (e) => { if (dirtySections().length) { e.preventDefault(); e.returnValue = ""; } });
+
+    /* ---------- tool chrome ----------
+       Driven by shownTool() (= loadedTool), so labels always name the tool whose data is
+       in the fields — never the radio's destination while a load is still in flight. */
+    function setBusy(b) {
+      busy = b;
+      el("toolsw").classList.toggle("busy", b);
+      ["save-playground", "save-interface", "save-security"].forEach((id) => { el(id).disabled = b; });
     }
-    async function save(partial) {
+    function markSwitch(t) {
+      document.querySelectorAll(".toolsw-opt").forEach((btn) => {
+        const on = btn.dataset.tool === t;
+        btn.classList.toggle("on", on);
+        btn.setAttribute("aria-checked", String(on));
+      });
+    }
+    function applyToolChrome() {
+      const k = shownTool(), t = TOOLS[k];
+      document.body.dataset.tool = k;
+      document.querySelectorAll("[data-tool-name]").forEach((x) => { x.textContent = t.name; });
+      document.querySelectorAll("[data-tool-path]").forEach((x) => { x.textContent = t.path; });
+      el("save-playground").textContent = "Save to the " + t.short + " agent";
+      el("save-interface").textContent  = "Save the " + t.short + " chat interface";
+      el("save-security").textContent   = "Save the " + t.short + " limits";
+      el("preview-label").textContent   = t.name + " — live preview (test mode)";
+      el("kb-lamp-note").style.display  = k === "lamp" ? "" : "none";
+      el("kb-add-note").disabled = el("kb-upload-btn").disabled = (k === "lamp");
+      document.title = t.name + " — Admin";
+    }
+    function reloadPreview() { el("preview").src = TOOLS[shownTool()].path + "?test=1&r=" + Date.now(); }
+
+    /* ---------- config ---------- */
+    function applyCfg(c) {
+      el("instructions").value = c.instructions || "";
+      el("model").value = c.model || "";
+      el("enableWebSearch").checked = !!c.enableWebSearch;
+      el("welcomeHeading").value = c.welcomeHeading || "";
+      el("welcomeText").value = c.welcomeText || "";
+      el("placeholder").value = c.placeholder || "";
+      el("rateLimitPerMin").value = c.rateLimitPerMin ?? 8;
+      el("dailyCap").value = c.dailyCap ?? 400;
+      renderChips(c.chips || []);
+      markClean();
+    }
+    // Returns true if it painted, false if a newer load superseded it. Throws only while
+    // still current, so the caller can revert. NOTHING is written to a field before the
+    // sequence check and the shape check — a stale or broken response must not repaint.
+    async function loadCfg(t) {
+      const seq = ++cfgSeq;
+      setBusy(true);
+      let c;
       try {
-        const r = await fetch("/admin/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(partial) });
+        const r = await fetch(cfgUrl(t));
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        c = await r.json();
+        if (c && c.error) throw new Error(c.error);
+        if (!c || typeof c.instructions !== "string") throw new Error("unexpected response");
+        if (c._tool && c._tool !== t) throw new Error("server returned the " + (isTool(c._tool) ? TOOLS[c._tool].name : c._tool) + " config");
+      } catch (e) {
+        if (seq !== cfgSeq) return false;   // superseded — stay silent, the newer load owns the UI
+        setBusy(false); throw e;
+      }
+      if (seq !== cfgSeq) return false;
+      cfg = c; loadedTool = t; applyCfg(c); applyToolChrome(); setBusy(false);
+      return true;
+    }
+    async function save(partial, section) {
+      if (busy) return flash("Still loading — try again in a second.", false);
+      if (!loadedTool) return flash("Settings haven't loaded yet.", false);
+      const t = loadedTool;                 // save where the fields came from, not where the radio points
+      try {
+        const r = await fetch(cfgUrl(t), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(partial) });
         if (!r.ok) throw new Error((await r.json()).error || r.status);
-        cfg = await r.json();
-        flash("Saved ✓");
-      } catch (e) { flash("Save failed: " + e.message, false); }
+        const saved = await r.json();
+        if (saved._tool && saved._tool !== t) throw new Error("saved to the wrong tool — reload the page before editing again");
+        if (loadedTool === t) { cfg = saved; if (section) markClean(section); }
+        flash("Saved to the " + TOOLS[t].name + " ✓");
+      } catch (e) { flash("Save failed (" + TOOLS[t].name + "): " + e.message, false); }
     }
     function savePlayground() {
-      save({ instructions: el("instructions").value, model: el("model").value, enableWebSearch: el("enableWebSearch").checked });
+      save({ instructions: el("instructions").value, model: el("model").value, enableWebSearch: el("enableWebSearch").checked }, "playground");
     }
+    function saveSecurity() {
+      const per = el("rateLimitPerMin").value.trim(), day = el("dailyCap").value.trim();
+      if (per === "" || day === "" || !Number.isFinite(+per) || !Number.isFinite(+day)) return flash("Both limits need a number.", false);
+      if (+day === 0 && !confirm("A daily cap of 0 pauses the " + TOOLS[shownTool()].name + " for every customer. Save anyway?")) return;
+      save({ rateLimitPerMin: +per, dailyCap: +day }, "security");
+    }
+
+    /* ---------- tool switching ---------- */
+    async function switchTool(next) {
+      if (!isTool(next) || next === selectedTool || busy) { markSwitch(selectedTool); return; }
+      const d = dirtySections();
+      if (d.length && !confirm(
+          "You have unsaved changes in " + d.map((s) => SECTION_LABEL[s]).join(" and ") + ".\n\n" +
+          "Switching to the " + TOOLS[next].name + " will discard them.\n\nSwitch anyway?")) {
+        markSwitch(selectedTool);   // the radio already moved on click — put it back
+        return;
+      }
+      const prev = selectedTool;
+      selectedTool = next; markSwitch(next);
+      try {
+        if (!(await loadCfg(next))) return;   // superseded by a newer click
+        history.replaceState(null, "", location.pathname + (next === "hvac" ? "" : "?tool=" + next) + location.hash);
+        reloadPreview();
+        flash("Now editing the " + TOOLS[next].name);
+      } catch (e) {
+        if (selectedTool !== next) return;
+        selectedTool = prev; markSwitch(prev); applyToolChrome();
+        flash("Couldn't open the " + TOOLS[next].name + " — nothing was changed. " + e.message, false);
+      }
+    }
+    document.querySelectorAll(".toolsw-opt").forEach((b) => { b.onclick = () => switchTool(b.dataset.tool); });
 
     /* ---------- interface chips ---------- */
     function renderChips(chips) {
@@ -328,15 +494,22 @@
         el("chips").appendChild(row);
       });
     }
-    function readChips() {
-      return [...document.querySelectorAll(".chip-row")].map((row) => {
+    // keepEmpty is required anywhere the DOM is round-tripped or diffed: filtering
+    // half-typed rows here is what makes "+ Add chip" delete the row you were typing,
+    // and what makes the dirty-check miss an in-progress chip. Filter only at save.
+    function readChips(keepEmpty) {
+      const rows = [...document.querySelectorAll(".chip-row")].map((row) => {
         const g = (k) => row.querySelector(`[data-k=${k}]`).value.trim();
         return { label: g("label"), sub: g("sub"), q: g("q") };
-      }).filter((c) => c.label && c.q);
+      });
+      return keepEmpty ? rows : rows.filter((c) => c.label && c.q);
     }
-    function addChip() { const c = readChips(); c.push({ label: "", sub: "", q: "" }); renderChips(c); }
+    function addChip() { const c = readChips(true); c.push({ label: "", sub: "", q: "" }); renderChips(c); }
     function saveInterface() {
-      save({ welcomeHeading: el("welcomeHeading").value, welcomeText: el("welcomeText").value, placeholder: el("placeholder").value, chips: readChips() });
+      const chips = readChips();
+      if (!chips.length && ((cfg && cfg.chips) || []).length
+          && !confirm("This removes all suggestion chips from the " + TOOLS[shownTool()].name + " page. Save anyway?")) return;
+      save({ welcomeHeading: el("welcomeHeading").value, welcomeText: el("welcomeText").value, placeholder: el("placeholder").value, chips }, "interface");
     }
 
     /* ---------- activity + analytics ---------- */
@@ -460,7 +633,8 @@
           const del = document.createElement("button");
           del.className = "small danger"; del.textContent = "Delete";
           del.onclick = async () => {
-            if (!confirm(`Delete "${f.filename}" from the knowledge base? The agent will no longer see it.`)) return;
+            if (kbLocked()) return;
+            if (!confirm(`Delete "${f.filename}" from the knowledge base? The AI HVAC Parts Finder will no longer see it.`)) return;
             const r2 = await fetch("/admin/api/kb/" + encodeURIComponent(f.id), { method: "DELETE" });
             if (r2.ok) { flash("Deleted ✓"); loadKb(); } else flash("Delete failed", false);
           };
@@ -471,7 +645,16 @@
         el("kb-list").innerHTML = `<span class="empty" style="color:var(--red)">Couldn't load files: ${esc(e.message)}</span>`;
       }
     }
+    // One shared vector store, HVAC-only in effect (server: wantsDocuments = tool !== "lamp").
+    // Block writes from a lamp-labelled screen so a lamp-mode delete can't strip HVAC manuals
+    // and a lamp-mode upload can't inject noise into live HVAC retrieval.
+    function kbLocked() {
+      if (shownTool() !== "lamp") return false;
+      flash("Switch to the AI HVAC Parts Finder to change the knowledge base.", false);
+      return true;
+    }
     async function uploadKb(file) {
+      if (kbLocked()) return;
       if (!file) return;
       if (file.size > 50 * 1048576) return flash("File too large (50 MB max)", false);
       flash("Uploading " + file.name + "…");
@@ -486,6 +669,7 @@
       el("kb-upload").value = "";
     }
     async function addSnippet() {
+      if (kbLocked()) return;
       const title = el("snip-title").value.trim().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "note";
       const body = el("snip-body").value.trim();
       if (!body) return flash("Write the note first", false);
@@ -496,7 +680,18 @@
       else flash("Failed: " + ((await r.json()).error || r.status), false);
     }
 
-    loadCfg().then(route);
+    // The tool lives in the query string, never the hash: route() matches the hash
+    // against a bare section id with no fallback, so "#lamp/playground" would leave
+    // every section inactive and blank the panel for every existing bookmark.
+    // An unknown ?tool= falls through to hvac. .finally(route) means a failed config
+    // load can no longer leave the panel blank (it used to: loadCfg().then(route)).
+    const wantedTool = new URLSearchParams(location.search).get("tool");
+    if (isTool(wantedTool)) selectedTool = wantedTool;
+    markSwitch(selectedTool);
+    applyToolChrome();
+    loadCfg(selectedTool)
+      .catch((e) => flash("Couldn't load settings: " + e.message, false))
+      .finally(() => { route(); if (shownTool() !== "hvac") reloadPreview(); });
   </script>
 </body>
 </html>

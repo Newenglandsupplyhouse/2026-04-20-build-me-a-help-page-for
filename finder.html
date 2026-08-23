@@ -428,7 +428,10 @@
         const typingEl = addTyping();
 
         try {
-          const res = await fetch("/api/chat", {
+          // The tool goes in the URL as well as the body: the server has to pick a
+          // config for the rate-limit check BEFORE it reads the body, so a body-only
+          // tool meant every lamp request was metered against the HVAC limits.
+          const res = await fetch("/api/chat?tool=" + encodeURIComponent(finderTool), {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
