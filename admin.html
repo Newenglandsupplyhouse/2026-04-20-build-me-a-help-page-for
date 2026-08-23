@@ -213,7 +213,7 @@
     <section id="activity">
       <h1>Chat logs</h1>
       <div class="sub">Every customer conversation, straight from the CRM. Test-mode chats are excluded.</div>
-      <div class="note plain">These are the chats from <b>both finders together</b>. The log does not record which tool answered, so HVAC and projector-lamp conversations appear here mixed and cannot be separated. The switch on the left changes what you <b>edit</b>, not what you see here.</div>
+      <div class="note plain">These are the chats from <b>both finders together</b>, each tagged with the one that answered it. Chats from before <b>23 Aug 2026</b> carry no tag — the log didn't record it yet, and there is no reliable way to tell after the fact. The switch on the left changes what you <b>edit</b>, not what you see here.</div>
       <div class="activity-bar">
         <input type="date" id="log-day">
         <button class="small" onclick="loadLogs(true)">Filter day</button>
@@ -230,7 +230,7 @@
     <section id="analytics">
       <h1>Analytics</h1>
       <div class="sub">Live counts from your own data — no plan gates.</div>
-      <div class="note plain">Combined totals for <b>both finders</b>. The chat log doesn't record which tool answered, so these numbers can't be broken out per tool.</div>
+      <div class="note plain">Combined totals for <b>both finders</b> — the chart and the daily table are not split by tool. For the lamp-vs-HVAC breakdown, see the <b>SUMMARY at the top of the 7am daily chat email</b>, or the per-conversation tag in Activity.</div>
       <div class="stats">
         <div class="stat"><div class="k">Conversations (7 days)</div><div class="v" id="st-c7">–</div></div>
         <div class="stat"><div class="k">Messages (7 days)</div><div class="v" id="st-m7">–</div></div>
@@ -568,8 +568,11 @@
       convos.forEach((turns, i) => {
         const item = document.createElement("div");
         item.className = "convo-item";
+        // Which finder answered. Blank on anything logged before 2026-08-23 — show nothing
+        // rather than guessing, since an old row carries no way to tell.
+        const who = TOOLS[turns[0].tool] ? TOOLS[turns[0].tool].short : "";
         item.innerHTML = `<div class="t">${esc(turns[0].question.slice(0, 70))}</div>
-          <div class="m"><span>${turns.length} message${turns.length === 1 ? "" : "s"}</span><span>${ago(turns[turns.length - 1].ts)}</span></div>`;
+          <div class="m"><span>${who ? `<b>${esc(who)}</b> · ` : ""}${turns.length} message${turns.length === 1 ? "" : "s"}</span><span>${ago(turns[turns.length - 1].ts)}</span></div>`;
         item.onclick = () => {
           document.querySelectorAll(".convo-item").forEach((x) => x.classList.remove("sel"));
           item.classList.add("sel");

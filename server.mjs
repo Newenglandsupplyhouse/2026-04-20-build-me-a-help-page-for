@@ -1556,7 +1556,7 @@ async function createOpenAIResponse(conversation, cfg = null, options = {}) {
 
 // Fire-and-forget: record a completed Parts Finder Q&A turn in the NESH CRM (chat_logs).
 // Never blocks or affects the customer's reply; silently no-ops if CRM_CHATLOG_SECRET is unset.
-function logChatToCrm(conversation, reply, usedTools, documents, sessionId) {
+function logChatToCrm(conversation, reply, usedTools, documents, sessionId, tool = "hvac") {
   const secret = process.env.CRM_CHATLOG_SECRET;
   if (!secret) return;
   const url = process.env.CRM_CHATLOG_URL || "https://nesh-crm.onrender.com/api/hooks/finder-chat";
@@ -1566,6 +1566,9 @@ function logChatToCrm(conversation, reply, usedTools, documents, sessionId) {
   const payload = {
     session_id: sessionId || "",
     source: "parts-finder",
+    // Which finder answered. Without this the CRM cannot tell an HVAC conversation from
+    // a projector-lamp one — they were byte-identical in the log until 2026-08-23.
+    tool: tool || "hvac",
     question: (photoNote + String(lastUser.content || "")).slice(0, 8000),
     answer: String(reply).slice(0, 20000),
     used_tools: usedTools || "",
@@ -2046,7 +2049,7 @@ const server = createServer(async (request, response) => {
       }
       // admin test-mode sessions (TEST- prefix, via /finder?test=1) are not logged to the CRM
       if (!String(parsed.sessionId || "").startsWith("TEST-")) {
-        logChatToCrm(conversation, finalReply, usedSources, shownDocuments, parsed.sessionId);
+        logChatToCrm(conversation, finalReply, usedSources, shownDocuments, parsed.sessionId, tool);
       }
       return;
     } catch (error) {
