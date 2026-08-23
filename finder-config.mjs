@@ -169,27 +169,125 @@ export const DEFAULT_CONFIG = {
   dailyCap: 400,           // max /api/chat requests per ET day across all visitors
 };
 
-export function loadConfig() {
+// ---------------------------------------------------------------------------
+// Projector Lamp Finder — the second tool profile.
+//
+// Same engine, different brain. Two things make it a separate profile rather
+// than a prompt tweak: (1) it answers from the lamp fitment index, which the
+// HVAC tool has no use for, and (2) several HVAC-correct statements are wrong
+// here — lamps ship from Missouri with no local pickup, and the document
+// library is HVAC-only so this tool must never imply it can produce a manual.
+// ---------------------------------------------------------------------------
+const LAMP_INSTRUCTIONS = `You are the AI Projector Lamp Finder for New England Supply House.
+
+Your one job: take whatever the customer knows about their projector — the projector model, a lamp part number, or a photo of the label — and get them to the exact replacement lamp that fits it, on our site, fast.
+
+CORE BEHAVIOR
+- Warm, professional, brief. Lead with the answer, not with a preamble.
+- Most customers know their PROJECTOR model, not their lamp part number. Never make them go find a part number first.
+- When you have a confident match, give: the lamp, the projector it fits, the price, whether it is in stock, and the product page link.
+- If more than one lamp fits, say so and explain the difference (bulb only vs. lamp with housing, original bulb vs. compatible) instead of dumping a list.
+
+HOW YOU DECIDE WHICH LAMP FITS — follow this order literally
+1. VERIFIED FITMENT MATCHES — when the context contains this block, it is the authoritative answer. It comes from our own catalog's fitment and cross-reference data. Trust it over your own knowledge and over the search results.
+2. CATALOG SEARCH RESULTS — live product search. Use it to confirm price and stock, and to catch anything the fitment data missed.
+3. Your own knowledge of projectors — ONLY to interpret what the customer typed (for example, recognising that "Home Cinema 8350" is an Epson). NEVER to state which lamp fits. If neither block above names a lamp, you do not know it, and you say so.
+
+NEVER SEND CUSTOMERS ELSEWHERE (highest priority)
+- Never name, mention, link, or suggest another seller, supplier, distributor, marketplace, manufacturer's own store, or website. Not Amazon, not eBay, not the projector manufacturer, not "your local dealer". Ever.
+- If we do not have it, say that plainly and stop. Do not soften it with a suggestion of where else to look.
+
+NEVER REVEAL WHERE WE SOURCE FROM
+- Never name or hint at our suppliers or distributors. Do not say JTX, Jaspertronics, PLI, Advanced Lamps, or "AL Series". The customer is buying from New England Supply House — that is the only name involved.
+
+NO PHANTOM ACTIONS
+- What you CAN do: answer the question, link the product page, and offer a back-in-stock alert on a sold-out lamp. That is the complete list.
+- Never offer to special-order, back-order, source, obtain, "get", hold, reserve, set aside, price-match, discount, quote, or invoice. You cannot do any of those.
+- Never describe a checkout, shipping, or fulfilment option you were not told we offer — no local pickup, no expedited shipping, no delivery dates.
+- Never end with an offer you cannot honour ("Want me to reserve one?", "I can hold that for you", "Let me add it to your cart").
+
+NEVER INVENT A FITMENT
+- A wrong lamp is a returned order. If you are not certain, ask for the exact projector model instead of guessing.
+- Do not claim a lamp fits because the model numbers look similar.
+
+STOCK AND SHIPPING
+- Projector lamps ship nationwide from our centrally located Missouri warehouse. There is NO local pickup for lamps — the Foxboro, MA pickup option is for HVAC parts only and must never be offered here.
+- If a lamp is sold out, say so and offer the back-in-stock alert. That is a real thing we do. Ask for an email address ONLY for that alert, never to arrange an order.
+
+CONFIRM BEFORE ORDERING
+- Close any specific lamp recommendation with a short version of: please confirm the part number against the label on your old lamp or inside the projector before ordering.
+
+PHOTOS (STRICT)
+- Photos are a last resort, not an opener. Search on the text you were given first.
+- You may ask for a photo at most once in a conversation, and only when the customer has given you no usable model or part number. This is an internal limit — never state it to the customer or write it in your reply.
+- Never ask for a photo of something we do not sell. If a photo is unusable, do not ask for another — ask one focused text question instead.
+
+DOCUMENTS
+- You have no document library for projector lamps. Never claim to search for, describe, list, or promise a manual, spec sheet, or datasheet for a lamp or projector.
+
+OUT OF SCOPE
+- We sell projector lamps and HVAC, heating, and plumbing parts. Anything else — automotive, consumer electronics, appliances — is not something we carry. Say so plainly; do not pretend we can get it.
+- If someone asks an HVAC question here, help if you can and point them to the AI HVAC Parts Finder at /pages/parts-finder.`;
+
+export const LAMP_DEFAULT_CONFIG = {
+  ...DEFAULT_CONFIG,
+  instructions: LAMP_INSTRUCTIONS,
+  // The lamp answer is a lookup against our own index, not a puzzle - "low" is right.
+  reasoningEffort: process.env.OPENAI_REASONING_EFFORT || "low",
+  welcomeHeading: "Which lamp fits your projector?",
+  welcomeText: "Tell me your projector's make and model — that is all I need. I will find the replacement lamp that fits it, what it costs, and whether it is in stock. No model number handy? A photo of the label on the projector or on the old lamp works too.",
+  placeholder: "Example: What lamp fits my Epson Home Cinema 8350?",
+  chips: [
+    { label: "Find the lamp for my projector", sub: "Make and model → the exact lamp", q: "What replacement lamp fits my Epson Home Cinema 8350?" },
+    { label: "Look up a lamp part number", sub: "ELPLP49, V13H010L49, POA-LMP…", q: "Do you carry lamp part number ELPLP49?" },
+    { label: "Bulb only, or lamp with housing?", sub: "Which one you actually need", q: "What is the difference between a bare bulb and a lamp with housing, and which one do I need?" },
+    { label: "My projector says “replace lamp”", sub: "What that means, what to order", q: "My projector is showing a “replace lamp” warning. What do I need to order?" },
+  ],
+};
+
+// Tool profiles. "hvac" keeps the original filename so nothing about the
+// existing HVAC finder changes on disk.
+const PROFILES = {
+  hvac: { file: "finder-config.json", defaults: DEFAULT_CONFIG, fallbackInstructions: DEFAULT_INSTRUCTIONS },
+  lamp: { file: "lamp-finder-config.json", defaults: LAMP_DEFAULT_CONFIG, fallbackInstructions: LAMP_INSTRUCTIONS },
+};
+
+export const TOOLS = Object.keys(PROFILES);
+export function resolveTool(name) {
+  return PROFILES[String(name || "").toLowerCase()] ? String(name).toLowerCase() : "hvac";
+}
+function profile(tool) {
+  return PROFILES[resolveTool(tool)];
+}
+function configPath(tool) {
+  return path.join(DATA_DIR, profile(tool).file);
+}
+
+export function loadConfig(tool = "hvac") {
+  const p = profile(tool);
   try {
-    const saved = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
-    return { ...DEFAULT_CONFIG, ...saved };
+    const saved = JSON.parse(readFileSync(configPath(tool), "utf8"));
+    return { ...p.defaults, ...saved };
   } catch {
-    return { ...DEFAULT_CONFIG };
+    return { ...p.defaults };
   }
 }
 
-export function saveConfig(partial) {
-  const merged = { ...loadConfig(), ...partial };
+export function saveConfig(partial, tool = "hvac") {
+  const p = profile(tool);
+  const merged = { ...loadConfig(tool), ...partial };
   // never persist empty instructions/model — fall back to defaults instead
-  if (!String(merged.instructions || "").trim()) merged.instructions = DEFAULT_INSTRUCTIONS;
-  if (!String(merged.model || "").trim()) merged.model = DEFAULT_CONFIG.model;
-  mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-  writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2));
+  if (!String(merged.instructions || "").trim()) merged.instructions = p.fallbackInstructions;
+  if (!String(merged.model || "").trim()) merged.model = p.defaults.model;
+  const target = configPath(tool);
+  mkdirSync(path.dirname(target), { recursive: true });
+  writeFileSync(target, JSON.stringify(merged, null, 2));
   return merged;
 }
 
-export function configInfo() {
-  return { path: CONFIG_PATH, persistent: CONFIG_PATH.startsWith("/var/data") };
+export function configInfo(tool = "hvac") {
+  const target = configPath(tool);
+  return { path: target, persistent: target.startsWith("/var/data") };
 }
 
 // ---- request limits (in-memory; reset on redeploy, which is fine for abuse protection) ----

@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig, saveConfig, checkLimits } from "./finder-config.mjs";
+import { loadConfig, saveConfig, checkLimits, resolveTool } from "./finder-config.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1585,8 +1585,9 @@ const escapeHtmlServer = (s) => String(s ?? "")
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-// Fill finder.html's __CFG_*__ tokens from the persisted config.
-function renderFinderPage(template, cfg) {
+// Fill finder.html's __CFG_*__ tokens from the persisted config. `tool` is echoed
+// into the page so the client posts it back on every /api/chat call.
+function renderFinderPage(template, cfg, tool = "hvac") {
   const chipsHtml = (Array.isArray(cfg.chips) ? cfg.chips : [])
     .filter((c) => c && c.label && c.q)
     .map((c) => `<button type="button" data-q="${escapeHtmlServer(c.q)}">${escapeHtmlServer(c.label)}<span>${escapeHtmlServer(c.sub || "")}</span></button>`)
@@ -1595,7 +1596,8 @@ function renderFinderPage(template, cfg) {
     .replace("__CFG_HEADING__", escapeHtmlServer(cfg.welcomeHeading))
     .replace("__CFG_WELCOME__", escapeHtmlServer(cfg.welcomeText))
     .replace("__CFG_PLACEHOLDER__", escapeHtmlServer(cfg.placeholder))
-    .replace("__CFG_CHIPS__", chipsHtml);
+    .replace("__CFG_CHIPS__", chipsHtml)
+    .replace(/__CFG_TOOL__/g, escapeHtmlServer(tool));
 }
 
 // Admin gate (HTTP Basic, username blank). Locked in the cloud until ADMIN_PASSWORD is set;
@@ -1682,10 +1684,15 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  if (request.method === "GET" && (requestUrl.pathname === "/finder" || requestUrl.pathname === "/finder/")) {
+  // Both finder tools render the same page shell; the config decides the wording
+  // and the `tool` field decides which brain answers. /finder stays the HVAC tool
+  // so every existing storefront link and bookmark is untouched.
+  const finderRoute = requestUrl.pathname.match(/^\/(finder|lamp-finder)\/?$/);
+  if (request.method === "GET" && finderRoute) {
+    const tool = finderRoute[1] === "lamp-finder" ? "lamp" : "hvac";
     try {
       const template = await readFile(path.join(__dirname, "finder.html"), "utf8");
-      sendHtml(response, 200, renderFinderPage(template, loadConfig()), origin);
+      sendHtml(response, 200, renderFinderPage(template, loadConfig(tool), tool), origin);
     } catch (error) {
       sendJson(response, 500, { error: `Failed to load finder page: ${error.message}` }, origin);
     }
@@ -1762,9 +1769,12 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    // ?tool=lamp manages the Projector Lamp Finder's config; no query string
+    // keeps the existing HVAC behaviour byte-for-byte.
     if (requestUrl.pathname === "/admin/api/config") {
+      const cfgTool = resolveTool(requestUrl.searchParams.get("tool"));
       if (request.method === "GET") {
-        sendJson(response, 200, loadConfig(), origin);
+        sendJson(response, 200, loadConfig(cfgTool), origin);
         return;
       }
       if (request.method === "PUT") {
@@ -1774,7 +1784,7 @@ const server = createServer(async (request, response) => {
             "placeholder", "chips", "rateLimitPerMin", "dailyCap"];
           const partial = {};
           for (const k of allowed) if (body[k] !== undefined) partial[k] = body[k];
-          sendJson(response, 200, saveConfig(partial), origin);
+          sendJson(response, 200, saveConfig(partial, cfgTool), origin);
         } catch (error) {
           sendJson(response, 400, { error: error.message }, origin);
         }
@@ -1864,8 +1874,13 @@ const server = createServer(async (request, response) => {
       response.write("event: " + event + "\ndata: " + JSON.stringify(data) + "\n\n");
     };
 
+    let tool = "hvac";
     try {
-      const cfg = loadConfig();
+      // The body carries the tool, but it is read after the rate-limit check below,
+      // which needs a config first. Peek at the query string so /api/chat?tool=lamp
+      // also works; the body value (read below) is authoritative.
+      tool = resolveTool(requestUrl.searchParams.get("tool"));
+      let cfg = loadConfig(tool);
 
       // Abuse protection: per-IP per-minute + global daily caps (this page has been bot-scraped).
       const ip = (request.headers["x-forwarded-for"] || "").split(",")[0].trim()
@@ -1893,12 +1908,21 @@ const server = createServer(async (request, response) => {
         return;
       }
 
+      // The body is authoritative for which tool is answering.
+      if (parsed.tool) {
+        const fromBody = resolveTool(parsed.tool);
+        if (fromBody !== tool) { tool = fromBody; cfg = loadConfig(tool); }
+      }
+
       // Streaming is opt-in per request so the buffered JSON contract still works for
       // anything that hasn't been updated: same {reply, usedTools, documents} shape.
       const wantsStream = parsed.stream === true
         || /text\/event-stream/i.test(String(request.headers.accept || ""));
 
-      const wantsDocuments = isDocumentRequest(conversation);
+      // The document library is HVAC literature only — there are no projector-lamp
+      // manuals in it. Running it for the lamp tool could only attach an unrelated
+      // HVAC PDF, so it stays off there and the lamp prompt says so plainly.
+      const wantsDocuments = tool !== "lamp" && isDocumentRequest(conversation);
 
       // Documents are surfaced ONLY here — the model has no document tool, so it
       // never narrates PDFs and can't contradict what we actually attach. We hit
@@ -1951,6 +1975,8 @@ const server = createServer(async (request, response) => {
         });
       }
 
+      // cfg already carries everything that differs between the two tools (the
+      // prompt, the wording, the model settings), so nothing else needs passing.
       const openAIResponse = await createOpenAIResponse(conversation, cfg, wantsStream
         ? { onDelta: (text) => sse("delta", { text }), signal: abort.signal }
         : {});
