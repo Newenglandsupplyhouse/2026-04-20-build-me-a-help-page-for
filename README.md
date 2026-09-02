@@ -46,31 +46,19 @@ For Shopify, keep the OpenAI call on your backend, not in theme code.
 - In Shopify Admin, create a page and assign the `help-chat` template
 - In the theme editor, open that page template and paste your backend route into the section setting named `Chatbase proxy URL`
 
-## Chatbase help proxy
+## Help page routes
 
-The server now includes a simple Chatbase help-page proxy so you can serve the Chatbase help UI through your own backend and hide the desktop recent-chats sidebar.
+The Chatbase proxy was retired on 2026-07-19; the chat now runs on the first-party OpenAI engine.
 
-- Proxied help page route: `/chatbase-help`
-- Proxied Chatbase assets: `/__cb/*`
-- Proxied Chatbase help-page API calls: `/api/chat/{agentId}/*`
+- `/finder` — the HVAC Parts Finder page (this is what the Shopify section should iframe)
+- `/lamp-finder` — the Projector Lamp Finder page
+- `/chatbase-help` — legacy URL, kept alive as an alias that serves the same finder page so older theme copies and bookmarks keep working; `/chatbase-help/*` (including the old `/chatbase-help/reset`) redirects to `/finder`
 
-By default, the proxy uses:
-
-```txt
-https://www.chatbase.co/iQxwux6_Bjma9xxVgm8Nb/help
-```
-
-You can override that by setting:
-
-```txt
-CHATBASE_HELP_URL=https://www.chatbase.co/your-agent-id/help
-```
-
-If you prefer to embed the browser version manually, you can still use `help-page.html`.
+If you prefer to embed the browser version manually, you can still use `help-page.html` (it iframes `/finder`).
 
 ## What the Shopify files do
 
-- The section renders a full-page iframe of your proxied Chatbase help page
+- The section renders a full-page iframe of your backend finder page
 - The proxy URL and optional direct Chatbase URL are editable in the theme editor
 - The page template loads only that section, making the help page clean and centered
 
@@ -109,7 +97,7 @@ More detail is in `SHOPIFY_TOKEN_SETUP.md`.
 - If Shopify credentials are not configured, the app still works with OpenAI plus your vector store.
 - `SHOPIFY_STOREFRONT_ORIGIN` must match the exact storefront origin that loads the page, including `https://`.
 - If you use both a `myshopify.com` domain and a custom storefront domain, set `SHOPIFY_STOREFRONT_ORIGIN` to a comma-separated list such as `https://store.example.com,https://your-store.myshopify.com`.
-- If you use the Chatbase proxy route, your Shopify iframe should point to your backend domain, for example `https://shopify-help-chat.onrender.com/chatbase-help`.
+- Your Shopify iframe should point to your backend domain, for example `https://shopify-help-chat.onrender.com/finder`.
 
 ## OpenAI docs used
 

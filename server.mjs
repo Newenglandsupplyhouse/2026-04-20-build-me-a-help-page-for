@@ -1706,6 +1706,33 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  // /chatbase-help is the retired Chatbase-proxy URL, but it is still what the live theme
+  // iframes: the stored page settings point here, and both help-chat sections hard-code a
+  // "Start over" bounce through /chatbase-help/reset (the desktop section fires it on every
+  // page load, not just on click). While these 404'd, the storefront help page rendered the
+  // JSON error inside a full-viewport iframe — a white screen. Serve the first-party HVAC
+  // finder here so every old theme copy, bookmark, and embed works without a theme re-upload.
+  if (request.method === "GET" && (requestUrl.pathname === "/chatbase-help" || requestUrl.pathname === "/chatbase-help/")) {
+    try {
+      const template = await readFile(path.join(__dirname, "finder.html"), "utf8");
+      sendHtml(response, 200, renderFinderPage(template, loadConfig("hvac"), "hvac"), origin);
+    } catch (error) {
+      sendJson(response, 500, { error: `Failed to load finder page: ${error.message}` }, origin);
+    }
+    return;
+  }
+
+  // Anything deeper — the theme's /chatbase-help/reset?next=… bounce and any other old
+  // proxy subpath — redirects to a fresh finder load. The finder keeps its chat in memory
+  // only, so a plain reload IS the reset; the cache-buster guarantees the iframe
+  // re-navigates. `next` is deliberately ignored: honouring it would be an open redirect,
+  // and every value the theme ever sent pointed back at this same origin anyway.
+  if (request.method === "GET" && requestUrl.pathname.startsWith("/chatbase-help/")) {
+    response.writeHead(302, { "Location": `/finder?reset=${Date.now()}`, "Cache-Control": "no-store" });
+    response.end();
+    return;
+  }
+
   // Short, clean mobile link for Claude Tools: /t/<TOOLS_TOKEN> — no query string, no special
   // chars, so it survives copy/paste, messaging apps, and Add-to-Home-Screen intact.
   const shortTools = requestUrl.pathname.match(/^\/t\/([A-Za-z0-9]+)\/?$/);
@@ -1875,11 +1902,11 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  // Third-party Chatbase help-proxy routes (/chatbase-help, /chatbase-help/reset, /__cb/)
-  // removed 2026-07-19: the marketing-site demo and storefront finder now use the
-  // first-party OpenAI engine (/finder + /api/chat). These paths now fall through to 404.
-  // The buildChatbase*/proxyChatbaseRequest/injectChatbaseOverrides helpers above are now
-  // unused dead code and can be pruned in a follow-up.
+  // Third-party Chatbase proxying (/__cb/ assets, /api/chat/ trailing-slash) removed
+  // 2026-07-19: everything now runs on the first-party OpenAI engine (/finder + /api/chat).
+  // /chatbase-help itself is served above as a first-party alias of /finder — live themes
+  // still iframe it. The buildChatbase*/proxyChatbaseRequest/injectChatbaseOverrides
+  // helpers above are unused dead code and can be pruned in a follow-up.
 
   if (request.method === "POST" && requestUrl.pathname === "/api/chat") {
     // Declared outside the try so the catch below knows whether headers already went

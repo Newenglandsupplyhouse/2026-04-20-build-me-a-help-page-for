@@ -45,7 +45,7 @@ http://localhost:3000/api/chat
 4. Assign the `page.help-chat` template to that page.
 5. In `Online Store` -> `Themes` -> `Customize`, open that page.
 6. Click the `Shopify Help Chat` section.
-7. Set `Chatbase proxy URL` to your deployed backend route, for example `https://shopify-help-chat.onrender.com/chatbase-help`.
+7. Set `Chatbase proxy URL` to your deployed backend finder route, for example `https://shopify-help-chat.onrender.com/finder`. (The old `/chatbase-help` URL still works — the server serves the same finder page there.)
 
 ## Deployment recommendation
 
@@ -56,7 +56,7 @@ Recommended host: Render
 - After deploy, use:
 
 ```txt
-https://your-app.onrender.com/chatbase-help
+https://your-app.onrender.com/finder
 ```
 
 as the Shopify `Chatbase proxy URL`
