@@ -1,0 +1,107 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Pins the one service built from this repo, so its plan, disk, and env-var
+# surface are reviewable in git instead of drifting silently in the dashboard.
+#
+# ---------------------------------------------------------------------------
+# READ BEFORE THE FIRST APPLY — otherwise you get a duplicate $7/mo service
+# ---------------------------------------------------------------------------
+# Render matches a blueprint service to an existing one by NAME. If `name`
+# below does not match the live service exactly, Render does not adopt it — it
+# creates a SECOND service alongside it, which is the opposite of the point.
+#
+#   1. `name` must equal the live service name exactly. The value below is
+#      inferred from the URL in README.md / PROJECT_NOTES.md
+#      (https://shopify-help-chat.onrender.com) — confirm it in the dashboard.
+#   2. `disk.name` must equal the live disk's name exactly, and `sizeGB` must
+#      be >= its current size. Render disks grow but never shrink, so a
+#      smaller number here fails the apply.
+#   3. `region` is deliberately absent. Region is immutable after creation, so
+#      naming the wrong one is another way to end up with a duplicate. Render
+#      keeps the existing region when adopting.
+#
+# Secrets are all `sync: false`: never stored in git, and an apply will not
+# overwrite what is already set in the dashboard. Only the non-secret defaults
+# already present in .env.example are hardcoded — those DO overwrite on apply.
+
+# A preview environment is a full copy of this service, at full Starter price,
+# per pull request. Off by default: this is the easiest way for a $7/mo line
+# item to appear on the invoice without anyone deciding to add one.
+previews:
+  generation: "off"
+
+services:
+  - type: web
+    name: shopify-help-chat
+    runtime: node
+    # $7/mo. The `free` plan spins down after ~15 min idle and takes ~1 min to
+    # wake — fine for internal tools, not for a storefront-facing chat page.
+    plan: starter
+    # No third-party dependencies today (server.mjs and finder-config.mjs import
+    # only node: built-ins). Kept as npm install so it still works the day one
+    # is added, rather than failing in a confusing way.
+    buildCommand: npm install
+    startCommand: npm start
+    # Ungated GET that returns 200 (server.mjs:1688).
+    healthCheckPath: /
+    autoDeploy: true
+
+    # Admin and finder settings are persisted here by finder-config.mjs:11.
+    # Without this disk the code silently falls back to the ephemeral repo
+    # directory, and every deploy wipes the saved config.
+    disk:
+      name: finder-data
+      mountPath: /var/data
+      sizeGB: 1
+
+    envVars:
+      # --- Secrets / account-specific: set once in the dashboard ------------
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_VECTOR_STORE_ID
+        sync: false
+      # Required in production: with no ADMIN_PASSWORD, server.mjs:1614 locks
+      # the admin panel out entirely when RENDER is set.
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: TOOLS_TOKEN
+        sync: false
+      - key: SHOPIFY_STORE_DOMAIN
+        sync: false
+      - key: SHOPIFY_STOREFRONT_ACCESS_TOKEN
+        sync: false
+      # Exact storefront origin(s) including https://, comma-separated.
+      - key: SHOPIFY_STOREFRONT_ORIGIN
+        sync: false
+      - key: CHATBASE_HELP_URL
+        sync: false
+      # Defaults in code to the nesh-crm service; kept out of git so the two
+      # services can be re-pointed independently.
+      - key: CRM_CHATLOG_URL
+        sync: false
+      - key: CRM_CHATLOG_SECRET
+        sync: false
+
+      # --- Non-secret defaults (these overwrite dashboard values on apply) --
+      # package.json engines: >=20 <23
+      - key: NODE_VERSION
+        value: "22"
+      # Explicit, so the disk above is never silently bypassed by the
+      # existsSync("/var/data") fallback in finder-config.mjs:11.
+      - key: FINDER_DATA_DIR
+        value: /var/data
+      - key: OPENAI_MODEL
+        value: gpt-5-mini
+      - key: OPENAI_REASONING_EFFORT
+        value: low
+      - key: ENABLE_WEB_SEARCH
+        value: "true"
+      - key: SHOPIFY_API_VERSION
+        value: "2026-01"
+      - key: DOC_SCORE_MIN
+        value: "0.4"
+
+# The other six services on the invoice are built from other repos (nesh-crm
+# among them, per server.mjs:1562), so this blueprint does not govern them.
+# A blueprint can adopt services from other repos by adding `repo:` to each
+# entry — worth doing if you want the whole account pinned in one place.

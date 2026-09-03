@@ -61,6 +61,22 @@ https://your-app.onrender.com/chatbase-help
 
 as the Shopify `Chatbase proxy URL`
 
+### Blueprint (`render.yaml`)
+
+The service definition is pinned in `render.yaml` — plan, disk, and the full
+env-var surface — so changes show up in a diff instead of drifting in the
+dashboard. It also disables preview environments, which otherwise bill a full
+copy of the service per pull request.
+
+Before the first apply, read the header comment in `render.yaml`. Render adopts
+an existing service only when the blueprint `name` matches it exactly; a
+mismatch silently creates a second paid service instead. The same applies to
+`disk.name`, and `disk.sizeGB` must be at least the live disk's current size.
+
+The blueprint covers only the service built from this repo. Other services in
+the workspace are built from other repos and are not governed by it.
+
+
 ## Environment variables needed
 
 - `OPENAI_API_KEY`
