@@ -1,6 +1,6 @@
 {% liquid
   assign section_id = 'shopify-help-chat-mobile-' | append: section.id
-  assign chatbase_proxy_url = section.settings.chatbase_proxy_url | default: 'https://shopify-help-chat.onrender.com/finder'
+  assign chatbase_proxy_url = section.settings.chatbase_proxy_url | default: 'https://shopify-help-chat.onrender.com/chatbase-help'
   assign chatbase_url = section.settings.chatbase_url | default: 'https://www.chatbase.co/iQxwux6_Bjma9xxVgm8Nb/help'
   assign iframe_url = chatbase_proxy_url
 
@@ -207,15 +207,14 @@
         return;
       }
 
-      // Reload the configured URL directly with a cache-buster. The old bounce through
-      // the backend's /chatbase-help/reset route left the iframe on a 404 (a white
-      // screen) once that Chatbase-era route was retired; the finder keeps its chat in
-      // memory only, so a fresh load of the page IS the reset.
-      const freshUrl = new URL(initialSrc, window.location.href);
+      const baseUrl = new URL(initialSrc, window.location.href);
+      const freshUrl = new URL(baseUrl.toString());
       freshUrl.searchParams.set("reset", String(Date.now()));
+      const resetUrl = new URL("/chatbase-help/reset", baseUrl.origin);
+      resetUrl.searchParams.set("next", freshUrl.toString());
       frame.setAttribute("src", "about:blank");
       window.setTimeout(() => {
-        frame.setAttribute("src", freshUrl.toString());
+        frame.setAttribute("src", resetUrl.toString());
       }, 20);
     };
 
@@ -244,7 +243,7 @@
       "type": "url",
       "id": "chatbase_proxy_url",
       "label": "Chatbase proxy URL",
-      "info": "Recommended. Paste your backend finder URL, for example https://shopify-help-chat.onrender.com/finder"
+      "info": "Recommended. Paste your proxied help page URL, for example https://shopify-help-chat.onrender.com/chatbase-help"
     },
     {
       "type": "url",
