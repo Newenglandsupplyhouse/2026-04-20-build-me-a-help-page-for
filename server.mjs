@@ -1685,6 +1685,43 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  // ── BOT PROBE ───────────────────────────────────────────────────────────────
+  // Returns a 1x1 GIF and logs the caller's IP + user agent. It exists to identify
+  // the headless-Chrome crawler that is ~51% of GA4 sessions and 0% of revenue.
+  // It is referenced ONLY from the honeypot storefront page /pages/d29vZC1jaG, a
+  // URL measured at 54/54 crawler sessions and zero human visitors — so no real
+  // customer's address is recorded here. Nothing else links to it.
+  // REMOVE THIS once the crawler is identified: see project_direct_traffic_bot.
+  if (request.method === "GET" && requestUrl.pathname === "/bot-probe") {
+    const ip = (request.headers["x-forwarded-for"] || "").split(",")[0].trim()
+      || request.socket?.remoteAddress || "";
+    console.log("[nesh-botprobe] " + JSON.stringify({
+      t: new Date().toISOString(),
+      ip,
+      ua: request.headers["user-agent"] || "",
+      ref: request.headers.referer || request.headers.referrer || "",
+      lang: request.headers["accept-language"] || "",
+      enc: request.headers["accept-encoding"] || "",
+      acc: request.headers.accept || "",
+      via: request.headers.via || "",
+      chUa: request.headers["sec-ch-ua"] || "",
+      chPlat: request.headers["sec-ch-ua-platform"] || "",
+      chMobile: request.headers["sec-ch-ua-mobile"] || "",
+      fetchSite: request.headers["sec-fetch-site"] || "",
+      tag: requestUrl.searchParams.get("t") || ""
+    }));
+    // 1x1 transparent GIF, never cached so every visit is logged
+    const gif = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
+    response.writeHead(200, {
+      "Content-Type": "image/gif",
+      "Content-Length": gif.length,
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+      "Access-Control-Allow-Origin": "*"
+    });
+    response.end(gif);
+    return;
+  }
+
   if (request.method === "GET" && requestUrl.pathname === "/") {
     const html = await readFile(path.join(__dirname, "help-page.html"), "utf8");
     sendHtml(response, 200, html, origin);
