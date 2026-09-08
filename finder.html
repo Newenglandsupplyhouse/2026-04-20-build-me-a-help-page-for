@@ -151,7 +151,11 @@
     .bubble .sent-photos img { max-width: 120px; max-height: 120px; border-radius: 8px; border: 1px solid var(--border); }
     textarea#input {
       flex: 1 1 auto; resize: none; border: 0; outline: 0; background: transparent;
-      color: var(--text); font-size: 14.5px; line-height: 1.5; font-family: inherit;
+      /* 16px minimum: iOS Safari auto-zooms the whole page (including the parent
+         page when this chat is iframed on the storefront) on focusing any input
+         whose font is smaller, and the zoom sticks after the keyboard closes,
+         leaving the page cropped and scrollable left-to-right. */
+      color: var(--text); font-size: 16px; line-height: 1.5; font-family: inherit;
       max-height: 140px; padding: 6px 0;
     }
     textarea#input::placeholder { color: #61636e; }
