@@ -1147,6 +1147,29 @@ function searchTermWeight(term) {
   return 2;                                       // brand or other distinctive word
 }
 
+// The part the customer is asking FOR, as distinct from the equipment it goes in.
+// "I need a thermocouple for my Honeywell gas valve" names one product (thermocouple)
+// and one piece of context (a Honeywell gas valve). Shopify search and the title
+// re-ranker treated every word alike, and the context words ARE titles we sell, so
+// four gas valves outscored the part and the in-stock Honeywell thermocouple was never
+// shown. Recognise the ordinary ways a customer says what they want and take the words
+// up to the first "for / on / in / with ..." as the product. No match -> empty, and
+// every caller behaves exactly as before.
+const PRODUCT_CLAUSE = /\b(?:need(?:s|ed)?|want(?:s|ed)?|looking\s+for|searching\s+for|order(?:ing)?|buy(?:ing)?|purchas(?:e|ing)|find|replac(?:e|ing)|get|do\s+you\s+(?:have|carry|sell|stock)|you\s+(?:have|carry|sell|stock)|got)\s+(?:a|an|the|some|any|new|another|one|replacement|spare)?\s*(.+?)(?=\s+(?:for|on|in|with|to|that|which|from|off)\b|[,.?!;]|$)/i;
+
+function productClauseWords(userText) {
+  const match = String(userText || "").match(PRODUCT_CLAUSE);
+  if (!match) return [];
+  return match[1].toLowerCase().split(/[^a-z0-9]+/)
+    .filter((w) => w && !SEARCH_STOPWORDS.has(w) && !SEARCH_ASK_WORDS.has(w));
+}
+
+// Does this title name the product the customer asked for? Plural-tolerant both ways.
+function titleNamesProduct(title, productWords) {
+  const tokens = new Set(String(title || "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  return productWords.some((w) => tokens.has(w) || tokens.has(w.replace(/s$/, "")) || tokens.has(w + "s"));
+}
+
 function buildShopifySearchCandidates(userText) {
   const primary = buildShopifySearchQuery(userText);
   if (!primary || primary.includes(":")) {
@@ -1156,8 +1179,13 @@ function buildShopifySearchCandidates(userText) {
   const terms = primary.split(" ").filter(Boolean);
   const candidates = [primary];
   // Least-identifying terms drop off first; Array.sort is stable, so equally weighted
-  // words keep the order the customer typed them in.
-  const ranked = [...terms].sort((a, b) => searchTermWeight(b) - searchTermWeight(a));
+  // words keep the order the customer typed them in. The product word gets two extra
+  // points so it is the LAST thing to be dropped (category words like "thermocouple" score 1
+  // and brands 2, so a single point only tied): "for my honeywell gas valve i need a
+  // thermocouple" used to narrow all the way down to "honeywell".
+  const productWords = new Set(productClauseWords(userText));
+  const weight = (term) => searchTermWeight(term) + (productWords.has(term.toLowerCase().replace(/[^a-z0-9]/g, "")) ? 2 : 0);
+  const ranked = [...terms].sort((a, b) => weight(b) - weight(a));
 
   for (const keep of searchAttemptSizes(terms.length)) {
     const kept = new Set(ranked.slice(0, keep));
@@ -1190,9 +1218,14 @@ function productQueryTokens(userText) {
   return {
     numbers: words.filter((w) => /^\d+$/.test(w)),
     codes: [...codes],
-    words: words.filter((w) => /^[a-z]{3,}$/.test(w) && !SEARCH_STOPWORDS.has(w))
+    words: words.filter((w) => /^[a-z]{3,}$/.test(w) && !SEARCH_STOPWORDS.has(w)),
+    product: productClauseWords(userText)
   };
 }
+
+// Big enough that naming the asked-for part beats any count of context-word hits
+// (each worth 3), small enough that an exact part code (100+) still wins outright.
+const PRODUCT_WORD_BONUS = 25;
 
 function scoreProductForQuery(product, tokens) {
   const title = String(product.title || "").toLowerCase();
@@ -1201,6 +1234,10 @@ function scoreProductForQuery(product, tokens) {
 
   const wordHits = tokens.words.filter((w) => titleTokens.has(w)).length;
   let score = wordHits * 3;
+
+  // "thermocouple for my honeywell gas valve": the gas valves match three words, the
+  // thermocouple matches two - and the thermocouple is what they asked for.
+  if (tokens.product.length && titleNamesProduct(title, tokens.product)) score += PRODUCT_WORD_BONUS;
 
   // Exact whole-token beats substring. Both used to score 100, so "benq ms524" tied
   // the MS524 listing with the MS524A one and Shopify's own order broke the tie the
@@ -1319,15 +1356,30 @@ async function getShopifyProductContext(conversation) {
     return payload?.data?.products?.nodes || [];
   };
 
-  // Each retry is only reached when the previous one found nothing, so the common
-  // case is still exactly one Shopify round-trip (~0.2s).
-  let matched = [];
-  let usedQuery = searchQuery;
+  // A rung that came back non-empty used to end the search - wrong when it is non-empty
+  // with the WRONG products. "thermocouple for my honeywell gas valve" matched four gas
+  // valves (their descriptions mention thermocouples) and stopped, so the model never saw
+  // the in-stock Honeywell thermocouple one rung down. Now, when the customer named the
+  // part they want, keep descending until at least one title names it (or the ladder runs
+  // out), pooling every rung's results for the re-ranker. A query with no recognisable
+  // product clause, or whose first rung already names the part, stops exactly where it
+  // did before, so the common case is still one ~0.2s round-trip.
+  const productWords = productClauseWords(latestUserMessage);
+  const pool = new Map();
+  const usedQueries = [];
+  let namedTheProduct = false;
   for (const candidate of searchCandidates) {
-    matched = await runSearch(candidate);
-    usedQuery = candidate;
-    if (matched.length) break;
+    const results = await runSearch(candidate);
+    usedQueries.push(candidate);
+    for (const product of results) {
+      const key = product.handle || product.id;
+      if (!pool.has(key)) pool.set(key, product);
+      if (!namedTheProduct && productWords.length && titleNamesProduct(product.title, productWords)) namedTheProduct = true;
+    }
+    if (pool.size && (!productWords.length || namedTheProduct)) break;
   }
+  const matched = [...pool.values()];
+  const usedQuery = usedQueries.join(" / ");
 
   const products = rankProductsForQuery(matched, latestUserMessage, SHOPIFY_CONTEXT_PRODUCTS);
   if (!products.length) {
