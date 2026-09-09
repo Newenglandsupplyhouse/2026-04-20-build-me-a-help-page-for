@@ -1202,8 +1202,13 @@ function scoreProductForQuery(product, tokens) {
   const wordHits = tokens.words.filter((w) => titleTokens.has(w)).length;
   let score = wordHits * 3;
 
+  // Exact whole-token beats substring. Both used to score 100, so "benq ms524" tied
+  // the MS524 listing with the MS524A one and Shopify's own order broke the tie the
+  // wrong way - the finder recommended the neighbouring model's lamp. Substring still
+  // scores high because it is what catches "udx-200" in a "UDX200" title.
   for (const code of tokens.codes) {
-    if (titleTokens.has(code) || squishedTitle.includes(code)) score += 100;
+    if (titleTokens.has(code)) score += 120;
+    else if (squishedTitle.includes(code)) score += 100;
   }
 
   // A bare number is the strongest signal available when it IS the model ("1"), and
