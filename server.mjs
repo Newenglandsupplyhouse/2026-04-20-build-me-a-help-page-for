@@ -1227,6 +1227,31 @@ function productQueryTokens(userText) {
 // (each worth 3), small enough that an exact part code (100+) still wins outright.
 const PRODUCT_WORD_BONUS = 25;
 
+// Cross-reference part numbers live in product TAGS. 737 of 8,466 active Metropac
+// listings (8.7%) carry OEM / alternate numbers there that appear nowhere in the title -
+// the ICM Controls ICM282B is tagged HK42FZ004/008/011/016/034, the Carrier boards it
+// replaces. Shopify search matches those tags, which is how such a product reaches the
+// candidate list at all; but the model was never shown them, so it hedged a listed
+// replacement into a "closest match". Keep the part-number-looking tags and drop the
+// noise: wattage/voltage ("200W", "24V"), import and date markers, the stock-sync state
+// tags, plain category words, anything with a space (a part number never has one - the
+// lamp/filter cross-sell tag "Home Cinema 8350-FILTER" does), and anything already in the title.
+function crossReferenceTags(product) {
+  const titleUp = String(product.title || "").toUpperCase();
+  return (product.tags || []).filter((t) =>
+    t.length >= 4 && /[0-9]/.test(t) && /[A-Za-z-]/.test(t) && !t.includes(" ") &&
+    !/^[0-9.]+ ?(w|v|va|hp|a|amp|k|kw)$/i.test(t) &&
+    !/^import-/i.test(t) && !/^[0-9]{4}-[0-9]{2}(-[0-9]{2})?$/.test(t) &&
+    !/^(oos-|supplier-|core-|nesh-|gyt-|mm-)/i.test(t) &&
+    !titleUp.includes(t.toUpperCase())
+  ).slice(0, 12);
+}
+
+// A part code that matches a cross-reference tag counts almost like a title match. Kept
+// below the 100/120 a title match scores, so a product that IS the part still beats a
+// product listed as its replacement.
+const CROSS_REFERENCE_CODE_SCORE = 80;
+
 function scoreProductForQuery(product, tokens) {
   const title = String(product.title || "").toLowerCase();
   const titleTokens = new Set(title.split(/[^a-z0-9]+/).filter(Boolean));
@@ -1246,6 +1271,12 @@ function scoreProductForQuery(product, tokens) {
   for (const code of tokens.codes) {
     if (titleTokens.has(code)) score += 120;
     else if (squishedTitle.includes(code)) score += 100;
+  }
+  if (tokens.codes.length) {
+    const refs = crossReferenceTags(product).map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    for (const code of tokens.codes) {
+      if (refs.some((r) => r === code || r.includes(code))) { score += CROSS_REFERENCE_CODE_SCORE; break; }
+    }
   }
 
   // A bare number is the strongest signal available when it IS the model ("1"), and
@@ -1299,6 +1330,7 @@ async function getShopifyProductContext(conversation) {
           title
           handle
           productType
+          tags
           availableForSale
           description
           onlineStoreUrl
@@ -1395,6 +1427,7 @@ async function getShopifyProductContext(conversation) {
   ];
 
   for (const product of products) {
+    const crossRefs = crossReferenceTags(product);
     const minPrice = product.priceRange?.minVariantPrice;
     const priceText = minPrice
       ? `${minPrice.amount} ${minPrice.currencyCode}`
@@ -1408,6 +1441,7 @@ async function getShopifyProductContext(conversation) {
         `- ${product.title}`,
         // Supplier/vendor is confidential — never expose it to customers (vendor != brand).
         product.productType ? `type: ${product.productType}` : "",
+        crossRefs.length ? `cross-reference: ${crossRefs.join(", ")}` : "",
         `availability: ${product.availableForSale ? "available" : "unavailable"}`,
         `price: ${priceText}`,
         product.handle ? `handle: ${product.handle}` : "",
