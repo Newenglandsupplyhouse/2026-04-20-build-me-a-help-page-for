@@ -47,6 +47,31 @@ http://localhost:3000/api/chat
 6. Click the `Shopify Help Chat` section.
 7. Set `Chatbase proxy URL` to your deployed backend finder route, for example `https://shopify-help-chat.onrender.com/finder`. (The old `/chatbase-help` URL still works — the server serves the same finder page there.)
 
+## Storefront copy - where things ship from
+
+Collection and product descriptions live in Shopify admin, not in this repo. The
+theme push workflow only covers `sections/`, `templates/` and the other theme
+folders, so storefront copy has to be edited in Shopify by hand.
+
+The facts that copy has to match are the same ones `finder-config.mjs` gives the
+lamp finder:
+
+- Projector lamps ship nationwide from the centrally located Missouri warehouse.
+- There is no local pickup for lamps. The Foxboro, MA pickup option is for HVAC
+  parts only.
+
+The projector lamp collection description read "Fast shipping from our
+Massachusetts warehouse minimizes projector downtime". That points at the Foxboro
+HVAC pickup location instead of where lamps actually ship from. Corrected
+sentence:
+
+> Fast shipping from our centrally located Missouri warehouse minimizes projector
+> downtime.
+
+If the state is better left off the page entirely, use "Fast nationwide shipping
+keeps projector downtime to a minimum" instead. Do not put a Massachusetts
+shipping origin on lamp pages.
+
 ## Deployment recommendation
 
 Recommended host: Render
