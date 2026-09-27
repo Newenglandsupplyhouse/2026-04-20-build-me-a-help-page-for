@@ -1252,6 +1252,53 @@ function crossReferenceTags(product) {
 // product listed as its replacement.
 const CROSS_REFERENCE_CODE_SCORE = 80;
 
+// Who actually made a projector lamp. The ET-LAD510F was presented as a "Panasonic Brand
+// Original" lamp. It is not one: our ET-LAD510F listing ships the supplier's et-lad510f, an
+// original (Matsushita) bulb in a replacement housing. The Panasonic-branded quad pack is
+// the supplier's separate et-lad510f-om, which we list per projector (pt-dw17k-lamp-om).
+// The line the model reads never said which kind it was looking at, and listing words -
+// "Original Bulb", "genuine OEM bulb", "Osram OEM" - describe the BULB's maker, so with
+// the projector brand at the front of every title the model read them as the brand's own
+// lamp. The kind is not a matter of wording. Every vendor:JTX listing reuses the supplier's
+// handle verbatim (all 23,521 lamps checked), and the supplier puts the tier in the handle:
+// "-om" (or "-om-lamp") is the projector maker's own lamp, "-a" is a compatible one,
+// "-bulb" is a bare bulb, and anything else is an original bulb in a replacement housing
+// (elplp61-om / elplp61 / elplp61-a, $149.99 / $89.99 / $36.99 on the supplier's feed). The
+// PLI listings say it in the handle ("...-with-original-ushio-bulb-and-housing"). Only a
+// handle marks a lamp as the brand's own. The word "OEM" in a title never does: an SEO
+// title like "Projector Lamp | 380W Osram OEM" is about the bulb, and the supplier's own
+// titles call its replacement housings "OEM ... with Philips bulb inside". Unknown means
+// no type rather than a guess, and only projector lamps are typed: HVAC listings and lamp
+// filters never get one. The vendor is read here and never shown to the model.
+const LAMP_TYPE_OEM = "OEM - the projector maker's own brand-name lamp and housing";
+const LAMP_TYPE_ORIGINAL_BULB = "original bulb in a replacement housing - NOT the projector maker's own brand-name lamp";
+const LAMP_TYPE_COMPATIBLE = "compatible bulb in a replacement housing - NOT the projector maker's own brand-name lamp";
+const LAMP_TYPE_BARE_BULB = "bare bulb only, no housing - NOT the projector maker's own brand-name lamp";
+
+// The rule travels with the data rather than living only in the prompt. The live lamp
+// prompt is the saved /admin config, which shadows the seed in finder-config.mjs, so a
+// prompt edit alone does not reach customers until someone pushes it there; this line
+// does on the next deploy. Added only when a lamp on the page is typed.
+const LAMP_TYPE_NOTE = `"lamp type" says who made each lamp, from our own catalog data, and it overrides the title and description. Only the OEM type is the projector maker's own brand-name lamp: never call any other lamp genuine, OEM, brand original or "[brand] brand". On those lamps "Original", "genuine" and "OEM" describe the bulb inside, and the brand in the title is the projector the lamp fits.`;
+
+function lampType(product) {
+  const title = String(product.title || "");
+  const handle = String(product.handle || "").toLowerCase();
+  const isProjectorLamp = /projector/i.test(`${title} ${product.productType || ""}`)
+    && /\b(lamps?|bulbs?)\b/i.test(title) && !/\bfilters?\b/i.test(title);
+  if (!isProjectorLamp) return "";
+  // The supplier de-duplicates a few handles with a trailing number (powerlite-x21-lamp-om-1,
+  // tlplw11-a-1), so the tier suffix may carry one.
+  if (/(^|-)om(-lamp)?(-\d+)?$|-oem(-\d+)?$/.test(handle)) return LAMP_TYPE_OEM;
+  if (/-bulb(-only)?(-a)?(-\d+)?$/.test(handle) || /\b(bulb only|bare bulb)\b/i.test(title)) return LAMP_TYPE_BARE_BULB;
+  if (/-a(-\d+)?$/.test(handle) || /\bcompatible\b/i.test(title)) return LAMP_TYPE_COMPATIBLE;
+  if (/-with-original(-[a-z]+)?-bulb-and-housing$/.test(handle) || /\boriginal\b.*\bbulb\b/i.test(title)
+    || String(product.vendor || "").trim().toUpperCase() === "JTX") {
+    return LAMP_TYPE_ORIGINAL_BULB;
+  }
+  return "";
+}
+
 function scoreProductForQuery(product, tokens) {
   const title = String(product.title || "").toLowerCase();
   const titleTokens = new Set(title.split(/[^a-z0-9]+/).filter(Boolean));
@@ -1330,6 +1377,7 @@ async function getShopifyProductContext(conversation) {
           title
           handle
           productType
+          vendor
           tags
           availableForSale
           description
@@ -1425,9 +1473,11 @@ async function getShopifyProductContext(conversation) {
   const lines = [
     `Live Shopify product search results for "${latestUserMessage}" using query "${usedQuery}":`
   ];
+  if (products.some((product) => lampType(product))) lines.push(LAMP_TYPE_NOTE);
 
   for (const product of products) {
     const crossRefs = crossReferenceTags(product);
+    const lamp = lampType(product);
     const minPrice = product.priceRange?.minVariantPrice;
     const priceText = minPrice
       ? `${minPrice.amount} ${minPrice.currencyCode}`
@@ -1441,6 +1491,7 @@ async function getShopifyProductContext(conversation) {
         `- ${product.title}`,
         // Supplier/vendor is confidential — never expose it to customers (vendor != brand).
         product.productType ? `type: ${product.productType}` : "",
+        lamp ? `lamp type: ${lamp}` : "",
         crossRefs.length ? `cross-reference: ${crossRefs.join(", ")}` : "",
         `availability: ${product.availableForSale ? "available" : "unavailable"}`,
         `price: ${priceText}`,
