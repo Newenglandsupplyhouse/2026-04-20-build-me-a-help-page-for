@@ -1305,7 +1305,85 @@ function rankProductsForQuery(products, userText, limit) {
     .map((entry) => entry.product);
 }
 
-async function getShopifyProductContext(conversation) {
+// Lamp finder, overheating: a projector that runs hot or shuts itself off most often
+// needs its air filter cleaned or replaced, and the filter costs a fraction of the lamp.
+// The customer names the PROJECTOR, and a filter's title rarely does ("Epson V13H134A41
+// Replacement Projector Air Filter"), so the ordinary search for "epson powerlite 1980wu"
+// returns only the lamp and the finder could name the filter's part number but never
+// show its price or link. When a lamp-finder message describes heat or asks about a
+// filter, search "<model code> filter" as well, keep only air filters whose listing
+// names that code, and quote the listing text that names it - the fitment line sits
+// ~1,250 characters into the description, far past the 220 the main block shows.
+const LAMP_HEAT_SYMPTOM = /\b(?:over-?heat\w*|too hot|runs? hot|running hot|gets? hot|getting hot|heat(?:ing)? up|temp(?:erature)?s?\b|thermal|shut(?:s|ting)?\s*(?:it\s*self\s*)?(?:off|down)|turn(?:s|ing)?\s+(?:it\s*self\s+)?off|power(?:s|ing)?\s+(?:it\s*self\s+)?(?:off|down)|keeps?\s+(?:shutting|turning|powering)|fans?\s+(?:is\s+|are\s+)?(?:loud|noisy|roaring)|(?:loud|noisy)\s+fans?)/i;
+const LAMP_FILTER_WORD = /\bfilters?\b/i;
+const FILTER_SEARCH_MAX_TERMS = 3;
+const FILTER_CONTEXT_MAX = 3;
+
+function wantsLampFilterSearch(conversation) {
+  const text = getLatestUserMessage(conversation);
+  return LAMP_HEAT_SYMPTOM.test(text) || LAMP_FILTER_WORD.test(text);
+}
+
+// Model codes the customer has given anywhere in the conversation, newest first:
+// "1980WU" and "8350" count, "20 minutes" and "3rd floor" do not.
+function lampModelTerms(conversation) {
+  const terms = [];
+  for (let index = conversation.length - 1; index >= 0; index -= 1) {
+    const message = conversation[index];
+    if (message?.role !== "user" || !message.content) continue;
+    const { codes, numbers } = productQueryTokens(message.content);
+    for (const term of [...codes, ...numbers.filter((n) => n.length >= 3)]) {
+      if (/^\d+(?:st|nd|rd|th|am|pm|min|mins|hr|hrs|k|p|hz|w|v)$/.test(term)) continue;
+      if (!terms.includes(term)) terms.push(term);
+    }
+  }
+  return terms.slice(0, FILTER_SEARCH_MAX_TERMS);
+}
+
+function listingExcerpt(text, term) {
+  const flat = String(text || "").replace(/\s+/g, " ");
+  const at = flat.toLowerCase().indexOf(term);
+  if (at < 0) return "";
+  return flat.slice(Math.max(0, at - 140), at + term.length + 120).trim();
+}
+
+async function lampFilterContext(conversation, runSearch) {
+  const terms = lampModelTerms(conversation);
+  if (!terms.length) return "";
+  const found = new Map();
+  for (const term of terms) {
+    let results = [];
+    try { results = await runSearch(`${term} filter`); } catch { results = []; }
+    for (const product of results) {
+      if (!/filter/i.test(product.productType || "")) continue;
+      const titleHas = String(product.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "").includes(term);
+      const excerpt = listingExcerpt(product.description, term);
+      if (!titleHas && !excerpt) continue;
+      const key = product.handle || product.id;
+      if (!found.has(key)) found.set(key, { product, excerpt });
+    }
+    if (found.size) break;
+  }
+  if (!found.size) {
+    return `AIR FILTER SEARCH for "${terms.join(", ")}": no air filter in our catalog names this projector.`;
+  }
+  const lines = [`AIR FILTER SEARCH for "${terms.join(", ")}" - air filters in our catalog whose listing names this projector:`];
+  for (const { product, excerpt } of [...found.values()].slice(0, FILTER_CONTEXT_MAX)) {
+    const price = product.priceRange?.minVariantPrice;
+    lines.push([
+      `- ${product.title}`,
+      product.productType ? `type: ${product.productType}` : "",
+      `availability: ${product.availableForSale ? "available" : "unavailable"}`,
+      price ? `price: ${price.amount} ${price.currencyCode}` : "price unavailable",
+      product.onlineStoreUrl ? `url: ${product.onlineStoreUrl}` : "",
+      excerpt ? `listing says: "...${excerpt}..."` : ""
+    ].filter(Boolean).join(" | "));
+  }
+  return lines.join("\n");
+}
+
+async function getShopifyProductContext(conversation, options = {}) {
+  const tool = options.tool || "hvac";
   const storeDomain = process.env.SHOPIFY_STORE_DOMAIN;
   const storefrontToken = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN;
   const apiVersion = process.env.SHOPIFY_API_VERSION || "2026-01";
@@ -1414,11 +1492,16 @@ async function getShopifyProductContext(conversation) {
   const usedQuery = usedQueries.join(" / ");
 
   const products = rankProductsForQuery(matched, latestUserMessage, SHOPIFY_CONTEXT_PRODUCTS);
+  // Lamp finder only: the air-filter lookup rides alongside the ordinary results. The HVAC
+  // finder never reaches this, so its context is byte-for-byte what it was.
+  const filterBlock = tool === "lamp" && wantsLampFilterSearch(conversation)
+    ? await lampFilterContext(conversation, runSearch)
+    : "";
   if (!products.length) {
     return {
       source: "shopify",
       searchQuery,
-      text: `Live Shopify product search for "${latestUserMessage}" returned no matches.`
+      text: [`Live Shopify product search for "${latestUserMessage}" returned no matches.`, filterBlock].filter(Boolean).join("\n\n")
     };
   }
 
@@ -1455,7 +1538,7 @@ async function getShopifyProductContext(conversation) {
   return {
     source: "shopify",
     searchQuery: usedQuery,
-    text: lines.join("\n")
+    text: [lines.join("\n"), filterBlock].filter(Boolean).join("\n\n")
   };
 }
 
@@ -1585,7 +1668,7 @@ async function createOpenAIResponse(conversation, cfg = null, options = {}) {
     ]
   }));
 
-  const shopifyContext = await getShopifyProductContext(conversation);
+  const shopifyContext = await getShopifyProductContext(conversation, { tool: options.tool });
   if (shopifyContext?.text) {
     input.unshift({
       role: "system",
@@ -2157,11 +2240,11 @@ const server = createServer(async (request, response) => {
         });
       }
 
-      // cfg already carries everything that differs between the two tools (the
-      // prompt, the wording, the model settings), so nothing else needs passing.
+      // cfg carries the prompt, wording and model settings; tool is passed as well so the
+      // catalog search can add the lamp finder's air-filter lookup.
       const openAIResponse = await createOpenAIResponse(conversation, cfg, wantsStream
-        ? { onDelta: (text) => sse("delta", { text }), signal: abort.signal }
-        : {});
+        ? { onDelta: (text) => sse("delta", { text }), signal: abort.signal, tool }
+        : { tool });
       const usedSources = [
         ...openAIResponse.usedSources,
         summarizeTools(openAIResponse.payload.output)
