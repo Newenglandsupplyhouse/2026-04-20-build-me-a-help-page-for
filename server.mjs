@@ -2,7 +2,10 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig, saveConfig, checkLimits, overDailyCap, resolveTool, isTool, TOOLS } from "./finder-config.mjs";
+import {
+  loadConfig, saveConfig, checkLimits, overDailyCap, resolveTool, isTool, TOOLS,
+  CONFIG_FIELDS, configVersion, listHistory, getHistory, restoreVersion, ensureBaseline
+} from "./finder-config.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1501,6 +1504,7 @@ async function getShopifyProductContext(conversation, options = {}) {
     return {
       source: "shopify",
       searchQuery,
+      handles: [],
       text: [`Live Shopify product search for "${latestUserMessage}" returned no matches.`, filterBlock].filter(Boolean).join("\n\n")
     };
   }
@@ -1538,6 +1542,9 @@ async function getShopifyProductContext(conversation, options = {}) {
   return {
     source: "shopify",
     searchQuery: usedQuery,
+    // What the model was shown, recorded with the chat so a reply that offered nothing
+    // can be told apart: search found nothing, or search found it and the reply didn't use it.
+    handles: products.map((p) => p.handle).filter(Boolean),
     text: [lines.join("\n"), filterBlock].filter(Boolean).join("\n\n")
   };
 }
@@ -1724,13 +1731,15 @@ async function createOpenAIResponse(conversation, cfg = null, options = {}) {
 
   return {
     payload,
-    usedSources: shopifyContext?.text ? ["shopify"] : []
+    usedSources: shopifyContext?.text ? ["shopify"] : [],
+    // null = the catalog search didn't run (no store credentials, or nothing to search on)
+    catalog: shopifyContext ? { query: shopifyContext.searchQuery || "", handles: shopifyContext.handles || [] } : null
   };
 }
 
 // Fire-and-forget: record a completed Parts Finder Q&A turn in the NESH CRM (chat_logs).
 // Never blocks or affects the customer's reply; silently no-ops if CRM_CHATLOG_SECRET is unset.
-function logChatToCrm(conversation, reply, usedTools, documents, sessionId, tool = "hvac") {
+function logChatToCrm(conversation, reply, usedTools, documents, sessionId, tool = "hvac", catalog = null) {
   const secret = process.env.CRM_CHATLOG_SECRET;
   if (!secret) return;
   const url = process.env.CRM_CHATLOG_URL || "https://nesh-crm.onrender.com/api/hooks/finder-chat";
@@ -1749,6 +1758,9 @@ function logChatToCrm(conversation, reply, usedTools, documents, sessionId, tool
     documents: (Array.isArray(documents) ? documents : [])
       .map((d) => ({ filename: d.filename || d.title || "", url: d.url || d.document_url || d.file_url || "" }))
       .slice(0, 20),
+    // What the store search handed the model this turn (feeds the CRM's weekly gap report).
+    // Left out when the search didn't run, so the CRM can tell "found nothing" from "not recorded".
+    ...(catalog ? { catalog_query: String(catalog.query || "").slice(0, 300), catalog_handles: catalog.handles.slice(0, 20) } : {}),
   };
   fetch(`${url}?secret=${encodeURIComponent(secret)}`, {
     method: "POST",
@@ -2016,7 +2028,7 @@ const server = createServer(async (request, response) => {
 
     // ?tool=lamp manages the Projector Lamp Finder's config; no query string
     // keeps the existing HVAC behaviour byte-for-byte.
-    if (requestUrl.pathname === "/admin/api/config") {
+    if (requestUrl.pathname === "/admin/api/config" || requestUrl.pathname.startsWith("/admin/api/config/")) {
       const rawTool = requestUrl.searchParams.get("tool");
       // resolveTool fails open to hvac, which is right for /api/chat but wrong here:
       // a typo like ?tool=lamps would silently merge a lamp edit into the live HVAC
@@ -2026,20 +2038,70 @@ const server = createServer(async (request, response) => {
         return;
       }
       const cfgTool = resolveTool(rawTool);
-      // _tool lets the panel assert it read/wrote the profile it meant to. It is not in
-      // the PUT allow-list below, so it can never be persisted into a config file.
-      if (request.method === "GET") {
-        sendJson(response, 200, { ...loadConfig(cfgTool), _tool: cfgTool }, origin);
+      // _tool lets the panel assert it read/wrote the profile it meant to, and _version is
+      // the fingerprint it sends back on save. Neither is in CONFIG_FIELDS, so neither can
+      // ever be persisted into a config file.
+      const stamp = (cfg) => ({ ...cfg, _tool: cfgTool, _version: configVersion(cfgTool) });
+      // A save or restore made on top of a version the sender never saw is refused, so
+      // two editors (the panel and an API call) can't silently undo each other.
+      const staleBase = (body) => body._baseVersion && body._baseVersion !== configVersion(cfgTool);
+      const STALE = "The finder was changed after you loaded it. Reload to see the newer version, then make your change again.";
+      // "admin" only when the panel says so; every other writer is recorded as the API.
+      const metaFrom = (body) => ({ source: body._source === "admin" ? "admin" : "api", note: body._note });
+
+      if (requestUrl.pathname === "/admin/api/config") {
+        if (request.method === "GET") {
+          sendJson(response, 200, stamp(loadConfig(cfgTool)), origin);
+          return;
+        }
+        if (request.method === "PUT") {
+          try {
+            const body = await readJsonBody(request, 1048576);
+            if (staleBase(body)) {
+              sendJson(response, 409, { error: STALE, _version: configVersion(cfgTool) }, origin);
+              return;
+            }
+            const partial = {};
+            for (const k of CONFIG_FIELDS) if (body[k] !== undefined) partial[k] = body[k];
+            sendJson(response, 200, stamp(saveConfig(partial, cfgTool, metaFrom(body))), origin);
+          } catch (error) {
+            sendJson(response, 400, { error: error.message }, origin);
+          }
+          return;
+        }
+      }
+
+      // Version history: every save, newest first, without the config bodies.
+      if (requestUrl.pathname === "/admin/api/config/history" && request.method === "GET") {
+        sendJson(response, 200, { tool: cfgTool, _version: configVersion(cfgTool), versions: listHistory(cfgTool) }, origin);
         return;
       }
-      if (request.method === "PUT") {
+
+      // One version in full, plus the one saved before it, so the panel can show exactly
+      // what that save changed.
+      const versionMatch = requestUrl.pathname.match(/^\/admin\/api\/config\/history\/([\w-]+)$/);
+      if (versionMatch && request.method === "GET") {
+        const entry = getHistory(cfgTool, versionMatch[1]);
+        if (!entry) {
+          sendJson(response, 404, { error: "No such version." }, origin);
+          return;
+        }
+        const ids = listHistory(cfgTool).map((v) => v.id);
+        const prevId = ids[ids.indexOf(entry.id) + 1];
+        sendJson(response, 200, { entry, previous: prevId ? getHistory(cfgTool, prevId) : null }, origin);
+        return;
+      }
+
+      if (requestUrl.pathname === "/admin/api/config/restore" && request.method === "POST") {
         try {
-          const body = await readJsonBody(request, 1048576);
-          const allowed = ["instructions", "model", "reasoningEffort", "enableWebSearch", "welcomeHeading", "welcomeText",
-            "placeholder", "chips", "rateLimitPerMin", "dailyCap"];
-          const partial = {};
-          for (const k of allowed) if (body[k] !== undefined) partial[k] = body[k];
-          sendJson(response, 200, { ...saveConfig(partial, cfgTool), _tool: cfgTool }, origin);
+          const body = await readJsonBody(request);
+          if (staleBase(body)) {
+            sendJson(response, 409, { error: STALE, _version: configVersion(cfgTool) }, origin);
+            return;
+          }
+          const before = configVersion(cfgTool);
+          const saved = restoreVersion(cfgTool, String(body.id || ""), metaFrom(body));
+          sendJson(response, 200, { ...stamp(saved), _restored: configVersion(cfgTool) !== before }, origin);
         } catch (error) {
           sendJson(response, 400, { error: error.message }, origin);
         }
@@ -2287,7 +2349,7 @@ const server = createServer(async (request, response) => {
       }
       // admin test-mode sessions (TEST- prefix, via /finder?test=1) are not logged to the CRM
       if (!String(parsed.sessionId || "").startsWith("TEST-")) {
-        logChatToCrm(conversation, finalReply, usedSources, shownDocuments, parsed.sessionId, tool);
+        logChatToCrm(conversation, finalReply, usedSources, shownDocuments, parsed.sessionId, tool, openAIResponse.catalog);
       }
       return;
     } catch (error) {
@@ -2315,4 +2377,11 @@ const server = createServer(async (request, response) => {
 const port = Number(process.env.PORT || 3000);
 server.listen(port, () => {
   console.log(`Help page server running at http://localhost:${port}`);
+  for (const tool of TOOLS) {
+    try {
+      if (ensureBaseline(tool)) console.log(`config history: recorded the live ${tool} config as its starting point`);
+    } catch (error) {
+      console.error(`config history: couldn't record the ${tool} starting point: ${error.message}`);
+    }
+  }
 });

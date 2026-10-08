@@ -134,6 +134,52 @@
     .status { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 9px 20px; font-size: 13px; display: none; box-shadow: 0 6px 24px #0009; z-index: 50; }
     .status.ok { color: var(--green); } .status.err { color: var(--red); }
     .empty { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+
+    /* version history */
+    .history { display: grid; grid-template-columns: 330px 1fr; gap: 16px; align-items: start; height: calc(100dvh - 210px); min-height: 360px; }
+    .ver-list { border: 1px solid var(--border); border-radius: 14px; background: var(--panel); overflow-y: auto; height: 100%; }
+    .ver-item { padding: 11px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+    .ver-item:hover { background: var(--panel-2); }
+    .ver-item.sel { background: var(--panel-2); border-left: 3px solid var(--tool); padding-left: 11px; }
+    .ver-item .t { font-size: 13px; display: flex; justify-content: space-between; gap: 8px; }
+    .ver-item .m { font-size: 11.5px; color: var(--muted); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .live { color: var(--green); font-size: 11px; font-weight: 650; letter-spacing: .03em; }
+    .ver-detail { border: 1px solid var(--border); border-radius: 14px; background: var(--panel); overflow-y: auto; height: 100%; padding: 18px; }
+    .ver-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+    .ver-head .when { font-size: 14.5px; font-weight: 600; }
+    .ver-head .by { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+    .ver-head button.primary { margin-top: 0; flex: 0 0 auto; }
+    .ver-detail .hint, .modal .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; line-height: 1.5; }
+    @media (max-width: 900px) { .history { grid-template-columns: 1fr; height: auto; } .ver-list, .ver-detail { height: auto; max-height: 70dvh; } }
+
+    /* diffs: red = what goes, green = what replaces it */
+    .diff-field { margin-bottom: 18px; }
+    .diff-field h3 { font-size: 12.5px; font-weight: 600; margin: 0 0 6px; }
+    .diff { background: #0c0c11; border: 1px solid var(--border); border-radius: 10px; padding: 6px 0; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.55; }
+    .diff div { position: relative; white-space: pre-wrap; word-break: break-word; padding: 1px 12px 1px 28px; }
+    .diff div::before { content: attr(data-p); position: absolute; left: 11px; opacity: .8; }
+    .diff .ctx { color: #8a8c97; }
+    .diff .del { background: #2a1414; color: #ffb4ae; }
+    .diff .ins { background: #0f2a19; color: #a6f0c0; }
+    .diff .del mark { background: #7a2b2b; color: #fff; border-radius: 2px; }
+    .diff .ins mark { background: #1f6b3a; color: #fff; border-radius: 2px; }
+    .diff .skip { color: #55565f; font-style: italic; }
+    .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; }
+    .kv > div { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; word-break: break-word; }
+    .kv small { display: block; color: var(--muted); font-size: 11px; margin-bottom: 3px; }
+    .kv .was { color: #ffb4ae; } .kv .now { color: #a6f0c0; }
+
+    .modal-bg { position: fixed; inset: 0; background: #000b; display: none; align-items: center; justify-content: center; z-index: 60; padding: 12px; }
+    .modal-bg.open { display: flex; }
+    .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; width: min(940px, 100%); max-height: 90dvh; display: flex; flex-direction: column; box-shadow: 0 12px 48px #000c; }
+    .modal header { padding: 16px 18px 12px; border-bottom: 1px solid var(--border); }
+    .modal header h2 { font-size: 15.5px; margin: 0; }
+    .modal header p { margin: 5px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+    .modal header p b { color: #e0a13a; }
+    .modal .body { padding: 16px 18px 2px; overflow-y: auto; }
+    .modal footer { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .modal footer input { flex: 1 1 260px; }
+    .modal footer button.primary { margin-top: 0; }
   </style>
 </head>
 <body>
@@ -159,6 +205,7 @@
       <a href="#knowledge" data-s="knowledge">🗂 Knowledge</a>
       <a href="#interface" data-s="interface">💬 Chat Interface</a>
       <a href="#security" data-s="security">🛡 Security</a>
+      <a href="#history" data-s="history">🕓 Version history</a>
     </nav>
     <div class="foot">
       <a href="/finder" target="_blank">AI HVAC Parts Finder ↗</a><br>
@@ -308,7 +355,32 @@
         <button class="primary commit" id="save-security" onclick="saveSecurity()">Save the HVAC limits</button>
       </div>
     </section>
+
+    <!-- ============ VERSION HISTORY ============ -->
+    <section id="history">
+      <h1>Version history <span class="tool-badge" data-tool-name></span></h1>
+      <div class="sub">Every saved change to the <b data-tool-name></b>: the prompt, the chat interface and the limits. Pick one to see exactly what it changed, or put it back.</div>
+      <div class="note plain">Saves from this panel and changes made through the API (that's how Claude edits the prompt) both land here. Restoring a version is saved as a new change, so a restore can be undone too. History started on <b>7 Oct 2026</b>, and its first entry is what was live at that point. Nothing earlier was kept.</div>
+      <div class="activity-bar"><button class="small" onclick="loadHistory(true)">↻ Refresh</button></div>
+      <div class="history">
+        <div class="ver-list" id="ver-list"><div class="empty">Loading…</div></div>
+        <div class="ver-detail" id="ver-detail"><div class="empty">Select a version</div></div>
+      </div>
+    </section>
   </main>
+
+  <!-- Every save and restore goes through this: the exact change first, then a yes. -->
+  <div class="modal-bg" id="modal-bg">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <header><h2 id="modal-title"></h2><p id="modal-sub"></p></header>
+      <div class="body" id="modal-body"></div>
+      <footer>
+        <input type="text" id="modal-note" maxlength="300" placeholder="Note for the history (optional), e.g. why you changed it">
+        <button class="small" id="modal-cancel">Cancel</button>
+        <button class="primary commit" id="modal-ok">Save</button>
+      </footer>
+    </div>
+  </div>
 
   <div class="status" id="status"></div>
 
@@ -340,6 +412,7 @@
       document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.s === s));
       if ((s === "activity" || s === "analytics") && !logsCache) loadLogs();
       if (s === "knowledge" && !loadKb.done) { loadKb.done = true; loadKb(); }
+      if (s === "history") loadHistory();
     }
     window.addEventListener("hashchange", route);
 
@@ -434,6 +507,16 @@
       cfg = c; loadedTool = t; applyCfg(c); applyToolChrome(); setBusy(false);
       return true;
     }
+    // Fetch what the tool is answering with right now. Diffs are always taken against
+    // this, never against `cfg`: another save, or an API change, may have landed since
+    // the page loaded, and a diff against the stale copy would hide what gets replaced.
+    async function fetchLive(t) {
+      const r = await fetch(cfgUrl(t));
+      const live = await r.json();
+      if (!r.ok || live.error) throw new Error(live.error || "HTTP " + r.status);
+      if (t !== "hvac" && live._tool !== t) throw new Error("got the wrong finder's settings — reload the page");
+      return live;
+    }
     async function save(partial, section) {
       if (busy) return flash("Still loading — try again in a second.", false);
       if (!loadedTool) return flash("Settings haven't loaded yet.", false);
@@ -442,14 +525,50 @@
       // lands would count anything typed during the round-trip as already saved, and the
       // switch would then discard it without asking.
       const sentSnapshot = section ? SNAP[section]() : null;
+      setBusy(true);                        // also freezes the tool switch while the diff is open
       try {
-        const r = await fetch(cfgUrl(t), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(partial) });
-        if (!r.ok) throw new Error((await r.json()).error || r.status);
+        const live = await fetchLive(t);
+        const after = { ...live, ...partial };
+        const keys = changedKeys(live, after);
+        if (!keys.length) {
+          if (loadedTool === t && section) clean[section] = sentSnapshot;
+          return flash("Nothing to save — that's already what the " + TOOLS[t].name + " uses.");
+        }
+        const moved = !!(cfg && cfg._version && live._version !== cfg._version);
+        // What changed underneath this page since it loaded, and whether this save touches it.
+        const theirs = moved ? changedKeys(cfg, live) : [];
+        const clash = theirs.filter((k) => k in partial);
+        const names = (ks) => ks.map((k) => FIELD_LABEL[k] || k).join(", ");
+        const ok = await confirmDiff({
+          title: "Save these changes to the " + TOOLS[t].name + "?",
+          sub: clash.length
+            ? `<b>Heads up:</b> since you opened this page, someone else changed ${esc(names(clash))}. Saving replaces their version with yours. The red lines below are what you'd be removing.`
+            : theirs.length
+              ? `Since you opened this page, ${esc(names(theirs))} also changed. That change is kept, because your save only touches the fields below.`
+              : "Red is what goes, green is what replaces it. Customers get the new version on their next message.",
+          html: diffHtml(live, after, keys),
+          ok: "Save",
+        });
+        if (!ok) return flash("Not saved — nothing changed.");
+        const r = await fetch(cfgUrl(t), { method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...partial, _baseVersion: live._version, _source: "admin", _note: ok.note }) });
         const saved = await r.json();
+        if (!r.ok) throw new Error(saved.error || r.status);
         if (saved._tool && saved._tool !== t) throw new Error("saved to the wrong tool — reload the page before editing again");
-        if (loadedTool === t) { cfg = saved; if (section) clean[section] = sentSnapshot; }
+        if (loadedTool === t) {
+          cfg = saved;
+          if (section) clean[section] = sentSnapshot;
+          // Someone else's change landed in between: repaint so the other sections stop
+          // showing the version from before it — unless that would wipe unsaved typing.
+          if (moved && !dirtySections().length) applyCfg(saved);
+        }
+        historyCache = null;
         flash("Saved to the " + TOOLS[t].name + " ✓");
-      } catch (e) { flash("Save failed (" + TOOLS[t].name + "): " + e.message, false); }
+      } catch (e) {
+        flash("Save failed (" + TOOLS[t].name + "): " + e.message, false);
+      } finally {
+        setBusy(false);
+      }
     }
     function savePlayground() {
       // An empty prompt is NOT saved as empty: saveConfig substitutes the built-in SEED
@@ -482,6 +601,7 @@
         if (!(await loadCfg(next))) return;   // superseded by a newer click
         history.replaceState(null, "", location.pathname + (next === "hvac" ? "" : "?tool=" + next) + location.hash);
         reloadPreview();
+        if (location.hash === "#history") loadHistory(true);
         flash("Now editing the " + TOOLS[next].name);
       } catch (e) {
         if (selectedTool !== next) return;
@@ -626,6 +746,260 @@
         </div>`).join("");
       el("days-body").innerHTML = (logsCache?.byDay || []).map((x) =>
         `<tr><td>${esc(x.day)}</td><td>${x.conversations}</td><td>${x.messages}</td></tr>`).join("") || '<tr><td colspan="3" class="empty">No data yet</td></tr>';
+    }
+
+    /* ---------- diffs ---------- */
+    const FIELD_LABEL = {
+      instructions: "Instructions (system prompt)", model: "OpenAI model", reasoningEffort: "Reasoning effort",
+      enableWebSearch: "Web search fallback", welcomeHeading: "Heading", welcomeText: "Welcome text",
+      placeholder: "Input placeholder", chips: "Suggestion chips",
+      rateLimitPerMin: "Max messages per visitor per minute", dailyCap: "Max total messages per day",
+    };
+    const FIELDS = Object.keys(FIELD_LABEL);
+    const MULTILINE = new Set(["instructions", "welcomeText", "chips"]);
+    function asText(k, v) {
+      if (k === "chips") return (Array.isArray(v) ? v : []).map((c) => [c.label, c.sub, c.q].filter(Boolean).join("  ·  ")).join("\n");
+      if (typeof v === "boolean") return v ? "On" : "Off";
+      return v === undefined || v === null ? "" : String(v);
+    }
+    function changedKeys(a, b) { return FIELDS.filter((k) => JSON.stringify(a?.[k]) !== JSON.stringify(b?.[k])); }
+
+    // Longest-common-subsequence edit script: [["=", x] | ["-", x] | ["+", x]].
+    // The shared head and tail are peeled off first, so the table only spans the part
+    // that changed — a one-line edit to a 300-line prompt is a tiny table.
+    function lcs(a, b) {
+      let pre = 0;
+      while (pre < a.length && pre < b.length && a[pre] === b[pre]) pre++;
+      let suf = 0;
+      while (suf < a.length - pre && suf < b.length - pre && a[a.length - 1 - suf] === b[b.length - 1 - suf]) suf++;
+      const A = a.slice(pre, a.length - suf), B = b.slice(pre, b.length - suf);
+      const ops = a.slice(0, pre).map((x) => ["=", x]);
+      if (A.length * B.length > 4e6) {        // too big to align: show it as replaced wholesale
+        A.forEach((x) => ops.push(["-", x])); B.forEach((x) => ops.push(["+", x]));
+      } else {
+        const N = A.length, M = B.length;
+        const dp = Array.from({ length: N + 1 }, () => new Uint32Array(M + 1));
+        for (let i = N - 1; i >= 0; i--)
+          for (let j = M - 1; j >= 0; j--)
+            dp[i][j] = A[i] === B[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+        let i = 0, j = 0;
+        while (i < N && j < M) {
+          if (A[i] === B[j]) { ops.push(["=", A[i]]); i++; j++; }
+          else if (dp[i + 1][j] >= dp[i][j + 1]) ops.push(["-", A[i++]]);
+          else ops.push(["+", B[j++]]);
+        }
+        while (i < N) ops.push(["-", A[i++]]);
+        while (j < M) ops.push(["+", B[j++]]);
+      }
+      a.slice(a.length - suf).forEach((x) => ops.push(["=", x]));
+      return ops;
+    }
+    // Within a changed line, highlight only the words that differ. Lines that share
+    // little are left unhighlighted — marking every word helps nobody.
+    function wordMarks(a, b) {
+      const A = a.split(/(\s+)/), B = b.split(/(\s+)/);
+      const ops = lcs(A, B);
+      const same = ops.filter((o) => o[0] === "=" && o[1].trim()).length;
+      const words = Math.max(A.filter((t) => t.trim()).length, B.filter((t) => t.trim()).length, 1);
+      if (same / words < 0.4) return [esc(a), esc(b)];
+      let x = "", y = "";
+      for (const [op, t] of ops) {
+        const m = t.trim() ? `<mark>${esc(t)}</mark>` : esc(t);
+        if (op === "=") { x += esc(t); y += esc(t); }
+        else if (op === "-") x += m;
+        else y += m;
+      }
+      return [x, y];
+    }
+    const diffLine = (cls, p, html) => `<div class="${cls}" data-p="${p}">${html || "&nbsp;"}</div>`;
+    function textDiffHtml(before, after) {
+      const ops = lcs(String(before).split("\n"), String(after).split("\n"));
+      const CONTEXT = 2;                       // unchanged lines kept around each change
+      const near = ops.map(() => false);
+      ops.forEach((op, i) => {
+        if (op[0] !== "=") for (let d = -CONTEXT; d <= CONTEXT; d++) if (ops[i + d]) near[i + d] = true;
+      });
+      const out = [];
+      let i = 0;
+      while (i < ops.length) {
+        if (ops[i][0] === "=") {
+          if (near[i]) { out.push(diffLine("ctx", " ", esc(ops[i][1]))); i++; continue; }
+          let j = i;
+          while (j < ops.length && ops[j][0] === "=" && !near[j]) j++;
+          out.push(`<div class="skip" data-p=" ">⋯ ${j - i} unchanged line${j - i === 1 ? "" : "s"}</div>`);
+          i = j;
+          continue;
+        }
+        const dels = [], adds = [];
+        while (i < ops.length && ops[i][0] !== "=") { (ops[i][0] === "-" ? dels : adds).push(ops[i][1]); i++; }
+        const pairs = Math.min(dels.length, adds.length);
+        dels.forEach((l, k) => out.push(diffLine("del", "−", k < pairs ? wordMarks(l, adds[k])[0] : esc(l))));
+        adds.forEach((l, k) => out.push(diffLine("ins", "+", k < pairs ? wordMarks(dels[k], l)[1] : esc(l))));
+      }
+      return `<div class="diff">${out.join("")}</div>`;
+    }
+    function diffHtml(before, after, keys) {
+      return keys.map((k) => {
+        const a = asText(k, before?.[k]), b = asText(k, after?.[k]);
+        const body = MULTILINE.has(k)
+          ? textDiffHtml(a, b)
+          : `<div class="kv"><div><small>Before</small><span class="was">${esc(a) || "(empty)"}</span></div>` +
+            `<div><small>After</small><span class="now">${esc(b) || "(empty)"}</span></div></div>`;
+        return `<div class="diff-field"><h3>${esc(FIELD_LABEL[k] || k)}</h3>${body}</div>`;
+      }).join("");
+    }
+
+    // Resolves to { note } on yes, null on cancel / Escape / a click outside.
+    function confirmDiff({ title, sub, html, ok }) {
+      return new Promise((resolve) => {
+        el("modal-title").textContent = title;
+        el("modal-sub").innerHTML = sub || "";
+        el("modal-body").innerHTML = html;
+        el("modal-note").value = "";
+        el("modal-ok").textContent = ok;
+        el("modal-bg").classList.add("open");
+        el("modal-body").scrollTop = 0;
+        const done = (v) => {
+          el("modal-bg").classList.remove("open");
+          document.removeEventListener("keydown", onKey);
+          resolve(v);
+        };
+        const onKey = (e) => { if (e.key === "Escape") done(null); };
+        document.addEventListener("keydown", onKey);
+        el("modal-ok").onclick = () => done({ note: el("modal-note").value.trim() });
+        el("modal-cancel").onclick = () => done(null);
+        el("modal-bg").onclick = (e) => { if (e.target === el("modal-bg")) done(null); };
+        el("modal-ok").focus();
+      });
+    }
+
+    /* ---------- version history ---------- */
+    let historyCache = null;                   // { tool, _version, versions } for shownTool()
+    const historyUrl = (t, rest = "") => "/admin/api/config/history" + rest + (t === "hvac" ? "" : "?tool=" + encodeURIComponent(t));
+    function fmtWhen(iso) {
+      const d = new Date(iso);
+      if (isNaN(d)) return String(iso || "");
+      return new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(d) + " ET";
+    }
+    // Version ids start with the save time: 20261007T181455123Z-…
+    function idWhen(id) {
+      const m = String(id || "").match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(\d{3})Z/);
+      return m ? fmtWhen(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}.${m[7]}Z`) : "an older version";
+    }
+    function sourceLabel(v) {
+      if (v.source === "admin") return "Saved in this panel";
+      if (v.source === "api") return "Changed through the API (e.g. by Claude)";
+      if (v.source === "restore") return "Restored the version from " + idWhen(v.restoredFrom);
+      if (v.source === "baseline") return "What was live when history began";
+      return v.source || "";
+    }
+    async function loadHistory(force) {
+      const t = shownTool();
+      if (!force && historyCache && historyCache.tool === t) return renderHistory();
+      el("ver-list").innerHTML = '<div class="empty">Loading…</div>';
+      el("ver-detail").innerHTML = '<div class="empty">Select a version</div>';
+      try {
+        const r = await fetch(historyUrl(t));
+        const d = await r.json();
+        if (!r.ok || d.error) throw new Error(d.error || "HTTP " + r.status);
+        if (d.tool !== t) throw new Error("got the wrong finder's history — reload the page");
+        if (shownTool() !== t) return;         // switched finders while this was loading
+        historyCache = d;
+        renderHistory();
+      } catch (e) {
+        el("ver-list").innerHTML = `<div class="empty">Couldn't load the history: ${esc(e.message)}</div>`;
+      }
+    }
+    function renderHistory() {
+      const { versions, _version } = historyCache;
+      // Two entries can hold identical settings (a restore brings an old one back), so
+      // only the NEWEST entry that matches what is live gets the badge.
+      historyCache.liveId = (versions.find((v) => v.version === _version) || {}).id || null;
+      const list = el("ver-list");
+      list.innerHTML = versions.length ? "" :
+        '<div class="empty">No saved versions yet. The next save starts the history, and keeps what was live before it.</div>';
+      versions.forEach((v, i) => {
+        const isLive = v.id === historyCache.liveId;
+        const what = v.source === "baseline" ? "" : (v.changed || []).map((k) => FIELD_LABEL[k] || k).join(", ");
+        const item = document.createElement("div");
+        item.className = "ver-item";
+        item.innerHTML = `<div class="t"><span>${esc(fmtWhen(v.savedAt))}</span>${isLive ? '<span class="live">LIVE NOW</span>' : ""}</div>
+          <div class="m">${esc(sourceLabel(v))}</div>
+          ${what ? `<div class="m">Changed: ${esc(what)}</div>` : ""}
+          ${v.note ? `<div class="m">“${esc(v.note)}”</div>` : ""}`;
+        item.onclick = () => {
+          document.querySelectorAll(".ver-item").forEach((x) => x.classList.remove("sel"));
+          item.classList.add("sel");
+          showVersion(v.id);
+        };
+        list.appendChild(item);
+        if (i === 0) { item.classList.add("sel"); showVersion(v.id); }
+      });
+    }
+    async function showVersion(id) {
+      const t = shownTool();
+      const box = el("ver-detail");
+      box.innerHTML = '<div class="empty">Loading…</div>';
+      try {
+        const r = await fetch(historyUrl(t, "/" + encodeURIComponent(id)));
+        const d = await r.json();
+        if (!r.ok || d.error) throw new Error(d.error || "HTTP " + r.status);
+        if (shownTool() !== t) return;
+        const { entry, previous } = d;
+        const isLive = entry.id === historyCache?.liveId;
+        const keys = previous ? changedKeys(previous.config, entry.config) : [];
+        let body;
+        if (entry.source === "baseline") body = '<div class="note plain">This is what the finder was running when version history began. Nothing earlier was kept.</div>';
+        else if (!previous) body = '<div class="note plain">The version this one replaced is no longer kept (the history holds the last 200 saves).</div>';
+        else if (!keys.length) body = '<div class="note plain">This save didn\'t change anything visible.</div>';
+        else body = `<p class="hint">What this save changed, compared with the version before it:</p>${diffHtml(previous.config, entry.config, keys)}`;
+        box.innerHTML = `<div class="ver-head">
+            <div><div class="when">${esc(fmtWhen(entry.savedAt))}${isLive ? ' <span class="live">· LIVE NOW</span>' : ""}</div>
+            <div class="by">${esc(sourceLabel(entry))}${entry.note ? ` — “${esc(entry.note)}”` : ""}</div></div>
+            <button class="primary commit" id="restore-btn"${isLive ? " disabled" : ""}>${isLive ? "Customers get this one" : "Restore this version"}</button>
+          </div>${body}`;
+        if (!isLive) el("restore-btn").onclick = () => restoreTo(entry);
+      } catch (e) {
+        box.innerHTML = `<div class="empty">Couldn't load that version: ${esc(e.message)}</div>`;
+      }
+    }
+    async function restoreTo(entry) {
+      if (busy) return flash("Still loading — try again in a second.", false);
+      const t = shownTool();
+      const d = dirtySections();
+      if (d.length && !confirm("You have unsaved changes in " + d.map((s) => SECTION_LABEL[s]).join(" and ") +
+          ".\n\nRestoring reloads every field from the restored version and discards them.\n\nContinue?")) return;
+      setBusy(true);
+      try {
+        const live = await fetchLive(t);
+        const target = {};
+        FIELDS.forEach((k) => { if (entry.config[k] !== undefined) target[k] = entry.config[k]; });
+        const after = { ...live, ...target };
+        const keys = changedKeys(live, after);
+        if (!keys.length) return flash("That version is already what the " + TOOLS[t].name + " uses.");
+        const ok = await confirmDiff({
+          title: "Put the " + TOOLS[t].name + " back to " + fmtWhen(entry.savedAt) + "?",
+          sub: "Compared with what is live now: red goes, green comes back. The live version stays in the history, so this can be undone.",
+          html: diffHtml(live, after, keys),
+          ok: "Restore",
+        });
+        if (!ok) return flash("Not restored — nothing changed.");
+        const r = await fetch("/admin/api/config/restore" + (t === "hvac" ? "" : "?tool=" + encodeURIComponent(t)), {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: entry.id, _baseVersion: live._version, _source: "admin", _note: ok.note }),
+        });
+        const saved = await r.json();
+        if (!r.ok) throw new Error(saved.error || r.status);
+        if (saved._tool !== t) throw new Error("restored the wrong tool — reload the page before editing again");
+        if (loadedTool === t) { cfg = saved; applyCfg(saved); }
+        flash("Restored ✓ — the " + TOOLS[t].name + " is back to " + fmtWhen(entry.savedAt));
+        reloadPreview();
+        await loadHistory(true);
+      } catch (e) {
+        flash("Restore failed: " + e.message, false);
+      } finally {
+        setBusy(false);
+      }
     }
 
     /* ---------- knowledge ---------- */

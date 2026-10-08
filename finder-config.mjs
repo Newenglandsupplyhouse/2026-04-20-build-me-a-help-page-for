@@ -3,7 +3,8 @@
 // repo dir locally) and is edited through the /admin panel. Defaults below seed first boot;
 // the instructions text is the agent's Chatbase system prompt (exported 2026-07-06, see
 // chatbase-export/system-prompt.md) adapted for the native OpenAI tools this server uses.
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, renameSync, unlinkSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -324,16 +325,152 @@ export function loadConfig(tool = "hvac") {
   }
 }
 
-export function saveConfig(partial, tool = "hvac") {
+// The fields an operator may write — through the /admin panel, a PUT to
+// /admin/api/config, or a restore. Anything else in a body is ignored.
+export const CONFIG_FIELDS = ["instructions", "model", "reasoningEffort", "enableWebSearch", "welcomeHeading", "welcomeText",
+  "placeholder", "chips", "rateLimitPerMin", "dailyCap"];
+
+// A short fingerprint of the config a tool is answering with right now. The panel sends
+// back the one it loaded, so a save made on top of somebody else's newer change is
+// refused instead of silently undoing it.
+export function configVersion(tool = "hvac") {
+  return fingerprint(loadConfig(tool));
+}
+function fingerprint(cfg) {
+  return createHash("sha256").update(JSON.stringify(cfg)).digest("hex").slice(0, 12);
+}
+
+// `meta` is recorded in the version history: { source, note, restoredFrom }.
+export function saveConfig(partial, tool = "hvac", meta = {}) {
   const p = profile(tool);
-  const merged = { ...loadConfig(tool), ...partial };
-  // never persist empty instructions/model — fall back to defaults instead
+  const t = resolveTool(tool);
+  // An empty prompt used to be swapped for the built-in SEED, which quietly destroyed a
+  // customised prompt while the panel said "Saved". Refuse it for every caller.
+  if (partial.instructions !== undefined && !String(partial.instructions).trim()) {
+    throw new Error("The instructions can't be empty.");
+  }
+  const before = loadConfig(t);
+  const merged = { ...before, ...partial };
   if (!String(merged.instructions || "").trim()) merged.instructions = p.fallbackInstructions;
   if (!String(merged.model || "").trim()) merged.model = p.defaults.model;
-  const target = configPath(tool);
-  mkdirSync(path.dirname(target), { recursive: true });
-  writeFileSync(target, JSON.stringify(merged, null, 2));
+  const changed = changedFields(before, merged);
+  if (!changed.length) return merged;   // nothing changed: no write, no new version
+
+  // The first save after history began also keeps what was live before it, so the very
+  // first change can be undone too.
+  if (!historyIds(t).length) writeHistory(t, before, { source: "baseline", changed: [] });
+  const entry = writeHistory(t, merged, { ...meta, changed });
+  try {
+    writeAtomic(configPath(t), JSON.stringify(merged, null, 2));
+  } catch (error) {
+    // The version never went live, so it must not sit in the history as if it had.
+    try { unlinkSync(historyPath(t, entry.id)); } catch { /* already gone */ }
+    throw error;
+  }
+  pruneHistory(t);
   return merged;
+}
+
+// ---- version history ----
+// Every save keeps a full copy of the config it wrote, newest last, under
+// config-history/<tool>/ on the same disk. Until 2026-10-07 there was none at all: a
+// save overwrote finder-config.json and the previous prompt was gone for good.
+const HISTORY_DIR = path.join(DATA_DIR, "config-history");
+const HISTORY_KEEP = 200;   // ~25 KB each, so ~5 MB per tool at the cap
+// Ids are generated here and sort by time. The strict pattern also keeps a crafted id
+// from walking out of the history folder.
+const HISTORY_ID = /^\d{8}T\d{9}Z-[0-9a-f]{6}$/;
+
+function historyDir(tool) {
+  return path.join(HISTORY_DIR, resolveTool(tool));
+}
+function historyPath(tool, id) {
+  return path.join(historyDir(tool), `${id}.json`);
+}
+function historyIds(tool) {
+  try {
+    return readdirSync(historyDir(tool))
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => f.slice(0, -5))
+      .filter((id) => HISTORY_ID.test(id))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+function writeAtomic(target, text) {
+  mkdirSync(path.dirname(target), { recursive: true });
+  const tmp = `${target}.${process.pid}.tmp`;
+  writeFileSync(tmp, text);
+  renameSync(tmp, target);
+}
+function changedFields(a, b) {
+  const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])];
+  return keys.filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+}
+function writeHistory(tool, config, meta) {
+  const stamp = new Date().toISOString().replace(/[-:.]/g, "");   // 20261007T181455123Z
+  const entry = {
+    id: `${stamp}-${randomBytes(3).toString("hex")}`,
+    tool: resolveTool(tool),
+    savedAt: new Date().toISOString(),
+    source: meta.source || "api",
+    note: String(meta.note || "").slice(0, 300),
+    restoredFrom: meta.restoredFrom || null,
+    changed: meta.changed || [],
+    // Same fingerprint configVersion() gives while this version is live, so the panel can
+    // tell which entry customers are getting right now.
+    version: fingerprint(config),
+    config,
+  };
+  writeAtomic(historyPath(tool, entry.id), JSON.stringify(entry, null, 2));
+  return entry;
+}
+function pruneHistory(tool) {
+  const ids = historyIds(tool);
+  for (const id of ids.slice(0, Math.max(0, ids.length - HISTORY_KEEP))) {
+    try { unlinkSync(historyPath(tool, id)); } catch { /* best-effort */ }
+  }
+}
+
+// Run at boot: a tool with no history yet gets what it is answering with right now as its
+// first entry, so the history shows today's live prompt before anyone has saved anything.
+export function ensureBaseline(tool) {
+  if (historyIds(tool).length) return false;
+  writeHistory(tool, loadConfig(tool), { source: "baseline", changed: [] });
+  return true;
+}
+
+// Newest first, without the config bodies (the list can be 200 long).
+export function listHistory(tool = "hvac") {
+  return historyIds(tool).reverse().map((id) => {
+    try {
+      const { config, ...rest } = JSON.parse(readFileSync(historyPath(tool, id), "utf8"));
+      return { ...rest, instructionsChars: String(config?.instructions || "").length };
+    } catch {
+      return null;
+    }
+  }).filter(Boolean);
+}
+
+// One version in full, or null if there is no such id for this tool.
+export function getHistory(tool, id) {
+  if (!HISTORY_ID.test(String(id || ""))) return null;
+  try {
+    return JSON.parse(readFileSync(historyPath(tool, id), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+// Put an old version back. It is saved like any other change, so the version being
+// replaced stays in the history and the restore itself can be undone.
+export function restoreVersion(tool, id, meta = {}) {
+  const entry = getHistory(tool, id);
+  if (!entry) throw new Error(`No saved version "${id}" for this finder.`);
+  const partial = {};
+  for (const k of CONFIG_FIELDS) if (entry.config[k] !== undefined) partial[k] = entry.config[k];
+  return saveConfig(partial, tool, { ...meta, source: "restore", restoredFrom: id });
 }
 
 export function configInfo(tool = "hvac") {
