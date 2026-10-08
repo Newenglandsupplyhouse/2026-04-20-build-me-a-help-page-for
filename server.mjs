@@ -1113,6 +1113,48 @@ function withoutPackagingSuffix(term) {
   return match && isPartCodeTerm(term) && isPartCodeTerm(match[1]) ? match[1] : term;
 }
 
+// Distributor catalog numbers. The supplier's catalog writes a 3-character maker code in front
+// of the maker's part number - HONQ3400A1024 is HON + Q3400A1024, B&GNRF-22 is B&G + NRF-22
+// (981 of the first 1,100 catalog numbers read on 2026-10-08 are exactly that). Customers copy
+// them off a quote or an invoice, our listings never carry them, and the finder answered "I
+// couldn't find HONQ3400A1024" for an in-stock part. The bare number is only tried after the
+// number as typed found nothing, and a hit only counts when the listing names the bare number
+// (see namesCode), so a wrong strip cannot put an unrelated product in front of the model.
+const MAKER_PREFIX = /^([A-Za-z&]{3})([A-Za-z0-9].*)$/;
+// Maker codes seen on the supplier's own product pages (2026-10-08). An all-digit remainder
+// ("AMT700-30" -> "700-30", "B&G103251" -> "103251") is only trusted behind one of these, so
+// "XYZ1234" is never read as part "1234". Letters-and-digits remainders need no list.
+const KNOWN_MAKER_CODES = new Set(["ALN", "AMT", "ANT", "AOS", "ARG", "ASC", "AST", "B&G", "B&J", "BAC", "BAR", "BAS", "BDW", "BEC", "BEL", "BRA", "CAL", "CAR", "CLE", "CON", "DAN", "DUN", "FIE", "FIR", "GRU", "HOF", "HON", "ICM", "JOH", "LAN", "LEN", "LOC", "MAX", "MCM", "MOD", "NOR", "QUI", "RAN", "RBS", "REZ", "RIB", "SCU", "SUN", "TAC", "TEK", "TJE", "TRA", "TRI", "UTI", "WAT", "WES"]);
+function withoutMakerPrefix(term) {
+  const match = MAKER_PREFIX.exec(String(term || ""));
+  if (!match || !isPartCodeTerm(term)) return term;
+  const rest = match[2];
+  const alnum = rest.replace(/[^A-Za-z0-9]/g, "");
+  if (alnum.length < 4 || !/\d/.test(alnum)) return term;
+  if (/[A-Za-z]/.test(alnum)) return isPartCodeTerm(rest) ? rest : term;
+  return KNOWN_MAKER_CODES.has(match[1].toUpperCase()) ? rest : term;
+}
+// Part numbers in the message that only make sense with the maker code (and any packaging
+// suffix) taken off: [{ asked: "HONQ3400A1024", bare: "Q3400A1024" }].
+function makerPrefixCodes(userText) {
+  const out = [];
+  for (const word of String(userText || "").split(/\s+/)) {
+    const asked = word.replace(/[?!.,;:]+$/, "");
+    const unprefixed = withoutMakerPrefix(asked);
+    if (unprefixed === asked) continue;
+    const bare = withoutPackagingSuffix(unprefixed);
+    if (!out.some((d) => d.bare === bare)) out.push({ asked, bare });
+  }
+  return out;
+}
+// Does this listing name the part number (title, tags or SKU), punctuation ignored?
+function namesCode(product, code) {
+  const squished = String(code || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const fields = [product.title, ...(product.tags || []), ...(product.variants?.nodes || []).map((v) => v.sku)]
+    .map((s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, ""));
+  return fields.some((field) => containsCode(field, squished));
+}
+
 const SEARCH_MAX_TERMS = 8;
 
 function buildShopifySearchQuery(userText) {
@@ -1260,14 +1302,21 @@ function buildShopifySearchCandidates(userText) {
   }
   const capped = candidates.slice(0, SHOPIFY_SEARCH_ATTEMPTS + SHOPIFY_CODE_ATTEMPTS);
 
-  // Each rung that carries a packaging suffix ("Q3400A1024/U") is retried without it right
-  // after, before any narrower rung: the customer's own wording still goes first, so a
-  // listing that names the suffixed number keeps matching it.
+  // Each rung that carries a packaging suffix ("Q3400A1024/U") or a catalog maker code
+  // ("HONQ3400A1024") is retried without it right after, before any narrower rung: the
+  // customer's own wording still goes first, so a listing that names the number as typed
+  // keeps matching it.
   const out = [];
   for (const candidate of capped) {
     out.push(candidate);
-    const bare = candidate.split(" ").map(withoutPackagingSuffix).join(" ");
-    if (bare !== candidate && !capped.includes(bare) && !out.includes(bare)) out.push(bare);
+    const words = candidate.split(" ");
+    const bare = words.map(withoutPackagingSuffix).join(" ");
+    // Maker codes come off only on a part-number-only rung (the ladder always reaches one), so a
+    // long message is not searched twice over.
+    const unprefixed = words.length === 1 ? withoutPackagingSuffix(withoutMakerPrefix(words[0])) : candidate;
+    for (const variant of [bare, unprefixed]) {
+      if (variant !== candidate && !capped.includes(variant) && !out.includes(variant)) out.push(variant);
+    }
   }
 
   // Last, the words without the numbers. A number we don't list - very often the
@@ -1626,8 +1675,13 @@ async function getShopifyProductContext(conversation, options = {}) {
   const pool = new Map();
   const usedQueries = [];
   let namedTheProduct = false;
+  const prefixed = makerPrefixCodes(latestUserMessage);
   for (const candidate of searchCandidates) {
-    const results = await runSearch(candidate);
+    let results = await runSearch(candidate);
+    // A rung searched on a number with its maker code taken off only keeps listings that name
+    // that number - "VSX130361EH" -> "130361EH" must not pull in whatever else matches.
+    const required = prefixed.filter((d) => candidate.split(" ").includes(d.bare));
+    if (required.length) results = results.filter((product) => required.every((d) => namesCode(product, d.bare)));
     usedQueries.push(candidate);
     for (const product of results) {
       const key = product.handle || product.id;
@@ -1636,14 +1690,16 @@ async function getShopifyProductContext(conversation, options = {}) {
     }
     if (pool.size && (!productWords.length || namedTheProduct)) break;
   }
-  const askedCodes = productQueryTokens(latestUserMessage).codes;
+  // Rank and fit on the bare numbers too: a title says "Q3400A1024", never "HONQ3400A1024".
+  const rankText = [latestUserMessage, ...prefixed.map((d) => d.bare)].join(" ");
+  const askedCodes = productQueryTokens(rankText).codes;
   for (const product of await siteSearch) {
     if (!pool.has(product.handle) && siteResultFits(product, tool, askedCodes)) pool.set(product.handle, product);
   }
   const matched = [...pool.values()];
   const usedQuery = usedQueries.join(" / ");
 
-  const products = rankProductsForQuery(matched, latestUserMessage, SHOPIFY_CONTEXT_PRODUCTS);
+  const products = rankProductsForQuery(matched, rankText, SHOPIFY_CONTEXT_PRODUCTS);
   // Lamp finder only: the air-filter lookup rides alongside the ordinary results. The HVAC
   // finder never reaches this, so its context is byte-for-byte what it was.
   const filterBlock = tool === "lamp" && wantsLampFilterSearch(conversation)
@@ -1663,9 +1719,14 @@ async function getShopifyProductContext(conversation, options = {}) {
   ];
   // Say so when a match came from dropping a packaging suffix, or the model hedges the
   // exact part into a "closest match" because the title lacks the "/U".
+  for (const { asked, bare } of prefixed) {
+    if (!usedQueries.some((q) => q.split(" ").includes(bare)) || !products.some((p) => namesCode(p, bare))) continue;
+    // Never name the supplier: "a distributor catalog number" is all the customer needs to hear.
+    lines.push(`Note: "${asked}" is a distributor catalog number - the maker code "${asked.slice(0, 3)}" in front of the part number "${bare}". A listing that names ${bare} IS the part the customer asked for.`);
+  }
   for (const asked of new Set(latestUserMessage.split(/\s+/).map((w) => w.replace(/[?!.,;:]+$/, "")))) {
     const bare = withoutPackagingSuffix(asked);
-    if (bare === asked || !usedQueries.some((q) => q.split(" ").includes(bare))) continue;
+    if (bare === asked || prefixed.some((d) => d.asked === asked) || !usedQueries.some((q) => q.split(" ").includes(bare))) continue;
     lines.push(/\/u$/i.test(asked)
       ? `Note: "${asked}" was searched as "${bare}". "/U" is the manufacturer's packaging code, so a listing for ${bare} IS the part the customer asked for.`
       : `Note: "${asked}" was searched as "${bare}" (without the "${asked.slice(bare.length)}" ending). Name the exact number the listing shows.`);
