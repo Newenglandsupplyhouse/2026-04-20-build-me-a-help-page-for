@@ -1270,6 +1270,25 @@ function buildShopifySearchCandidates(userText) {
 // the finder told them we might not carry it. Fetch wide, then re-rank in code.
 const SHOPIFY_SEARCH_CANDIDATES = 20;
 const SHOPIFY_CONTEXT_PRODUCTS = 8;
+// How many of the site search's top results join the candidate pool (see siteSearch).
+const SITE_SEARCH_RESULTS = 10;
+
+// Which site-search results a finder may use. Each finder only gets its own kind of
+// listing: "replacement board" handed the HVAC finder Smart Board projector lamps. Every
+// projector listing says so in its title ("Replacement Projector Lamp", "Projector Air
+// Filter", "Projector Bulb", "TV Lamp"); HVAC titles never do, and words like "lamp" or
+// "bulb" can't decide it ("Air Purifier UV Lamp" and "Bulb Well" are HVAC parts). And when
+// the customer typed a part number, only listings that name it: "PowerLite 1980WU" brought
+// in the 1985WU filter, a neighbouring model.
+const PROJECTOR_LISTING = /\bprojector\b|\btv lamp\b/i;
+function siteResultFits(product, tool, codes) {
+  const projector = PROJECTOR_LISTING.test(String(product.title || ""));
+  if ((tool === "lamp") !== projector) return false;
+  if (!codes.length) return true;
+  const fields = [product.title, ...(product.tags || []), ...(product.variants?.nodes || []).map((v) => v.sku)]
+    .map((s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, ""));
+  return codes.some((code) => fields.some((field) => containsCode(field, code)));
+}
 
 // The parts of a customer's message that identify WHICH product: bare model numbers
 // ("vent rite 1" -> "1"), alphanumeric part codes ("B1370F", "UDX-200" -> "udx200"),
@@ -1319,6 +1338,23 @@ function crossReferenceTags(product) {
 // product listed as its replacement.
 const CROSS_REFERENCE_CODE_SCORE = 80;
 
+// Does `code` appear in `squished` (lower-case, punctuation removed) as itself, not as the
+// front of a longer number? "tw10" is in "emptw100" - a different projector - and scored
+// the EMP-TW100 filter as if it were the EMP-TW10 lamp. A trailing letter is still a
+// match ("ms524" in "ms524a" is the variant's own neighbour, settled by the exact-token
+// bonus); a trailing digit, or a leading one before a numeric code, never is.
+function containsCode(squished, code) {
+  if (!code) return false;
+  for (let at = squished.indexOf(code); at >= 0; at = squished.indexOf(code, at + 1)) {
+    const after = squished[at + code.length] || "";
+    const before = squished[at - 1] || "";
+    if (/\d/.test(after)) continue;
+    if (/^\d/.test(code) && /\d/.test(before)) continue;
+    return true;
+  }
+  return false;
+}
+
 function scoreProductForQuery(product, tokens) {
   const title = String(product.title || "").toLowerCase();
   const titleTokens = new Set(title.split(/[^a-z0-9]+/).filter(Boolean));
@@ -1337,12 +1373,12 @@ function scoreProductForQuery(product, tokens) {
   // scores high because it is what catches "udx-200" in a "UDX200" title.
   for (const code of tokens.codes) {
     if (titleTokens.has(code)) score += 120;
-    else if (squishedTitle.includes(code)) score += 100;
+    else if (containsCode(squishedTitle, code)) score += 100;
   }
   if (tokens.codes.length) {
     const refs = crossReferenceTags(product).map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, ""));
     for (const code of tokens.codes) {
-      if (refs.some((r) => r === code || r.includes(code))) { score += CROSS_REFERENCE_CODE_SCORE; break; }
+      if (refs.some((r) => containsCode(r, code))) { score += CROSS_REFERENCE_CODE_SCORE; break; }
     }
   }
 
@@ -1467,10 +1503,7 @@ async function getShopifyProductContext(conversation, options = {}) {
   }
 
   const endpoint = `https://${storeDomain}/api/${apiVersion}/graphql.json`;
-  const graphQLQuery = `
-    query HelpPageProducts($query: String!) {
-      products(first: ${SHOPIFY_SEARCH_CANDIDATES}, query: $query, sortKey: RELEVANCE) {
-        nodes {
+  const productFields = `
           id
           title
           handle
@@ -1499,13 +1532,27 @@ async function getShopifyProductContext(conversation, options = {}) {
                 currencyCode
               }
             }
+          }`;
+  const graphQLQuery = `
+    query HelpPageProducts($query: String!) {
+      products(first: ${SHOPIFY_SEARCH_CANDIDATES}, query: $query, sortKey: RELEVANCE) {
+        nodes {${productFields}
+        }
+      }
+    }
+  `;
+  const siteSearchQuery = `
+    query HelpPageSiteSearch($query: String!) {
+      search(query: $query, first: ${SITE_SEARCH_RESULTS}, types: [PRODUCT], unavailableProducts: LAST) {
+        nodes {
+          ... on Product {${productFields}
           }
         }
       }
     }
   `;
 
-  const runSearch = async (term) => {
+  const storefront = async (query, term) => {
     const shopifyResponse = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -1513,7 +1560,7 @@ async function getShopifyProductContext(conversation, options = {}) {
         "X-Shopify-Storefront-Access-Token": storefrontToken
       },
       body: JSON.stringify({
-        query: graphQLQuery,
+        query,
         variables: {
           query: term
         }
@@ -1530,8 +1577,20 @@ async function getShopifyProductContext(conversation, options = {}) {
       throw new Error(payload.errors[0].message || "Shopify Storefront API returned an error.");
     }
 
-    return payload?.data?.products?.nodes || [];
+    return payload?.data || {};
   };
+  const runSearch = async (term) => (await storefront(graphQLQuery, term))?.products?.nodes || [];
+
+  // The site's own search (the engine behind the storefront search box) ranks an exact
+  // model match first; products(query:) does not. "EW300N" matches 117 Hitachi listings,
+  // and products(query:) put ten other models ahead of the three EW300N lamps, so the
+  // first page came back full, the search stopped, and the finder told the customer we
+  // had no lamp for it (2026-09-09; EH-TW7400 the same). Its top results join the pool for
+  // the re-ranker, which only lets them win on a better title match. Started now, so it
+  // runs alongside the first search instead of adding a wait; a failure costs nothing.
+  const siteSearch = storefront(siteSearchQuery, searchCandidates[0])
+    .then((data) => (data?.search?.nodes || []).filter((node) => node && node.handle))
+    .catch(() => []);
 
   // A rung that came back non-empty used to end the search - wrong when it is non-empty
   // with the WRONG products. "thermocouple for my honeywell gas valve" matched four gas
@@ -1554,6 +1613,10 @@ async function getShopifyProductContext(conversation, options = {}) {
       if (!namedTheProduct && productWords.length && titleNamesProduct(product.title, productWords)) namedTheProduct = true;
     }
     if (pool.size && (!productWords.length || namedTheProduct)) break;
+  }
+  const askedCodes = productQueryTokens(latestUserMessage).codes;
+  for (const product of await siteSearch) {
+    if (!pool.has(product.handle) && siteResultFits(product, tool, askedCodes)) pool.set(product.handle, product);
   }
   const matched = [...pool.values()];
   const usedQuery = usedQueries.join(" / ");
