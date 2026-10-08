@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createPublicKey, verify as verifySignature } from "node:crypto";
 import {
   loadConfig, saveConfig, checkLimits, overDailyCap, resolveTool, isTool, TOOLS,
   CONFIG_FIELDS, configVersion, listHistory, getHistory, restoreVersion, ensureBaseline
@@ -1931,6 +1932,58 @@ function adminAuthed(request) {
   return dec.slice(dec.indexOf(":") + 1) === ADMIN_PASSWORD;
 }
 
+// IW Scheduler (Jason's ops app) manages both finders from its Ask tab. It signs each
+// admin request with a P-256 key it generated for itself; only the PUBLIC half lives
+// here, in IWS_PUBLIC_JWK (published at <iws>/api/finder/key). So no password is shared,
+// and a leaked env var can't be used to write anything.
+// Each token is bound to one method + path, lives about a minute, and is accepted once.
+// It reaches the config, version-history, restore and chat-log routes, nothing else —
+// not the knowledge-base uploads or deletes.
+const IWS_ROUTES = /^\/admin\/api\/(config|config\/history|config\/history\/[\w-]+|config\/restore|logs)$/;
+const IWS_CLOCK_SKEW_S = 30;
+let iwsPublicKey = null;
+if (process.env.IWS_PUBLIC_JWK) {
+  try {
+    iwsPublicKey = createPublicKey({ key: JSON.parse(process.env.IWS_PUBLIC_JWK), format: "jwk" });
+  } catch (error) {
+    console.error(`IWS_PUBLIC_JWK is set but unreadable, so IW Scheduler can't reach the admin API: ${error.message}`);
+  }
+}
+const iwsSeenTokens = new Map();   // jti -> exp (seconds); a replayed token is refused
+
+function iwsAuthed(request, requestUrl) {
+  if (!iwsPublicKey) return false;
+  const h = request.headers.authorization || "";
+  if (!h.startsWith("IWS ")) return false;
+  const parts = h.slice(4).trim().split(".");
+  if (parts.length !== 3) return false;
+  let header;
+  let claims;
+  try {
+    header = JSON.parse(Buffer.from(parts[0], "base64url").toString());
+    claims = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+  } catch {
+    return false;
+  }
+  if (header?.alg !== "ES256") return false;
+  const signed = verifySignature(
+    "sha256",
+    Buffer.from(`${parts[0]}.${parts[1]}`),
+    { key: iwsPublicKey, dsaEncoding: "ieee-p1363" },
+    Buffer.from(parts[2], "base64url")
+  );
+  if (!signed) return false;
+  const now = Math.floor(Date.now() / 1000);
+  if (claims.aud !== "finder-admin") return false;
+  if (typeof claims.exp !== "number" || claims.exp + IWS_CLOCK_SKEW_S < now || claims.exp > now + 300) return false;
+  if (claims.m !== request.method || claims.p !== requestUrl.pathname + requestUrl.search) return false;
+  if (!IWS_ROUTES.test(requestUrl.pathname)) return false;
+  if (typeof claims.jti !== "string" || claims.jti.length < 16 || iwsSeenTokens.has(claims.jti)) return false;
+  for (const [jti, exp] of iwsSeenTokens) if (exp + IWS_CLOCK_SKEW_S < now) iwsSeenTokens.delete(jti);
+  iwsSeenTokens.set(claims.jti, claims.exp);
+  return true;
+}
+
 async function openAiAdmin(pathname, options = {}) {
   const res = await fetch(`https://api.openai.com${pathname}`, {
     ...options,
@@ -2123,7 +2176,7 @@ const server = createServer(async (request, response) => {
     const isToolsGet = request.method === "GET"
       && (requestUrl.pathname === "/admin/tools" || requestUrl.pathname === "/admin/tools/");
     const tokenOk = !!process.env.TOOLS_TOKEN && requestUrl.searchParams.get("k") === process.env.TOOLS_TOKEN;
-    if (!(adminAuthed(request) || (isToolsGet && tokenOk))) {
+    if (!(adminAuthed(request) || iwsAuthed(request, requestUrl) || (isToolsGet && tokenOk))) {
       response.writeHead(401, { "WWW-Authenticate": 'Basic realm="Parts Finder Admin"' });
       response.end("Authentication required");
       return;
@@ -2173,8 +2226,13 @@ const server = createServer(async (request, response) => {
       // two editors (the panel and an API call) can't silently undo each other.
       const staleBase = (body) => body._baseVersion && body._baseVersion !== configVersion(cfgTool);
       const STALE = "The finder was changed after you loaded it. Reload to see the newer version, then make your change again.";
-      // "admin" only when the panel says so; every other writer is recorded as the API.
-      const metaFrom = (body) => ({ source: body._source === "admin" ? "admin" : "api", note: body._note });
+      // "admin" only when the panel says so, "iws" only on a request IW Scheduler signed;
+      // every other writer is recorded as the API.
+      const viaIws = (request.headers.authorization || "").startsWith("IWS ");
+      const metaFrom = (body) => ({
+        source: body._source === "admin" ? "admin" : viaIws ? "iws" : "api",
+        note: body._note
+      });
 
       if (requestUrl.pathname === "/admin/api/config") {
         if (request.method === "GET") {
