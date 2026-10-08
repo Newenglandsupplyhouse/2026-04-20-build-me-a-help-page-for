@@ -1102,6 +1102,17 @@ function isPartCodeTerm(term) {
 }
 const SPEC_WORD = /^(phase|stage|speed|pack|wire|pole|ton|way|inch|volt|watt|amp|frame|piece|port|row|year)s?$/i;
 
+// Packaging suffixes. Resideo / Honeywell Home catalog numbers end in "/U" (other makers
+// use a letter or two the same way): the box and Resideo's site say Q3400A1024/U, the
+// supplier feed and our listing say Q3400A1024. Shopify never matches one to the other, so
+// the finder and the site search told a customer we didn't carry a part with 69 in stock
+// (SKU 2405, 2026-10-08). Fractions ("3/4", "UPS50-40/4") end in a digit and never match.
+const PACKAGING_SUFFIX = /^(.*\d.*)\/([A-Za-z]{1,2})$/;
+function withoutPackagingSuffix(term) {
+  const match = PACKAGING_SUFFIX.exec(String(term || ""));
+  return match && isPartCodeTerm(term) && isPartCodeTerm(match[1]) ? match[1] : term;
+}
+
 const SEARCH_MAX_TERMS = 8;
 
 function buildShopifySearchQuery(userText) {
@@ -1247,7 +1258,17 @@ function buildShopifySearchCandidates(userText) {
   for (const term of codes) {
     if (!candidates.includes(term)) candidates.push(term);
   }
-  const out = candidates.slice(0, SHOPIFY_SEARCH_ATTEMPTS + SHOPIFY_CODE_ATTEMPTS);
+  const capped = candidates.slice(0, SHOPIFY_SEARCH_ATTEMPTS + SHOPIFY_CODE_ATTEMPTS);
+
+  // Each rung that carries a packaging suffix ("Q3400A1024/U") is retried without it right
+  // after, before any narrower rung: the customer's own wording still goes first, so a
+  // listing that names the suffixed number keeps matching it.
+  const out = [];
+  for (const candidate of capped) {
+    out.push(candidate);
+    const bare = candidate.split(" ").map(withoutPackagingSuffix).join(" ");
+    if (bare !== candidate && !capped.includes(bare) && !out.includes(bare)) out.push(bare);
+  }
 
   // Last, the words without the numbers. A number we don't list - very often the
   // customer's UNIT model, which no part names - rides along on every rung above, so
@@ -1640,6 +1661,15 @@ async function getShopifyProductContext(conversation, options = {}) {
   const lines = [
     `Live Shopify product search results for "${latestUserMessage}" using query "${usedQuery}":`
   ];
+  // Say so when a match came from dropping a packaging suffix, or the model hedges the
+  // exact part into a "closest match" because the title lacks the "/U".
+  for (const asked of new Set(latestUserMessage.split(/\s+/).map((w) => w.replace(/[?!.,;:]+$/, "")))) {
+    const bare = withoutPackagingSuffix(asked);
+    if (bare === asked || !usedQueries.some((q) => q.split(" ").includes(bare))) continue;
+    lines.push(/\/u$/i.test(asked)
+      ? `Note: "${asked}" was searched as "${bare}". "/U" is the manufacturer's packaging code, so a listing for ${bare} IS the part the customer asked for.`
+      : `Note: "${asked}" was searched as "${bare}" (without the "${asked.slice(bare.length)}" ending). Name the exact number the listing shows.`);
+  }
 
   for (const product of products) {
     const crossRefs = crossReferenceTags(product);
