@@ -1080,24 +1080,64 @@ const SEARCH_STOPWORDS = new Set([
   "wondering", "if", "know", "tell", "about", "just", "also", "still", "think",
 ]);
 
+// Shopify search syntax a person might type on purpose ("tag:HK42FZ004", "sku:308660").
+// Only a field name glued to its value passes through untouched. Any other colon is
+// ordinary punctuation: customers copy labels ("Model: GMH80803BNBB", "Part #: 0130F00506",
+// "Projector: Runco Reflection VX-1000Ci"). Every message with a colon used to go to
+// Shopify verbatim as one query, which matched nothing, and the finder told a customer we
+// don't carry a Runco lamp that was in stock at $235 (2026-09-11).
+const SHOPIFY_FIELD_QUERY = /(?:^|\s)-?(?:title|tag|tag_not|sku|vendor|product_type|handle|variants\.sku):\S/i;
+
+// A part or model number: letters and digits together ("VX-1000Ci", "0130F00506"), or a
+// long number ("151-1026-00"). Shorter bare numbers ("2", "8124", a ZIP code) stay
+// ordinary terms.
+function isPartCodeTerm(term) {
+  const raw = String(term || "");
+  const t = raw.replace(/[^A-Za-z0-9]/g, "");
+  // Spec wording, not a part: "3-Phase", "2-stage", or a capitalised word glued to a
+  // number by a paste that lost its spaces ("460VAmperage").
+  if (raw.split("-").some((seg) => SPEC_WORD.test(seg)) || /[A-Z][a-z]{3,}/.test(raw)) return false;
+  return (/\d/.test(t) && /[A-Za-z]/.test(t) && t.length >= 4) || /^\d{6,}$/.test(t);
+}
+const SPEC_WORD = /^(phase|stage|speed|pack|wire|pole|ton|way|inch|volt|watt|amp|frame|piece|port|row|year)s?$/i;
+
+const SEARCH_MAX_TERMS = 8;
+
 function buildShopifySearchQuery(userText) {
   const compact = userText.trim().replace(/\s+/g, " ");
   if (!compact) {
     return "";
   }
 
-  if (compact.includes(":")) {
+  if (SHOPIFY_FIELD_QUERY.test(compact)) {
     return compact;
   }
 
+  const seen = new Set();
   const words = compact
+    .replace(/:/g, " ")
     .split(" ")
     .map((w) => w.replace(/[?!.,;:]+$/, ""))
-    .filter(Boolean);
+    // Bare punctuation ("#", "—") and prices ("$235") are never in a product title.
+    .filter((w) => /[a-z0-9]/i.test(w) && !/^\$\d/.test(w))
+    // Each word once: a pasted label repeats the brand ("Runco ... Runco ... Runco").
+    .filter((w) => {
+      const key = w.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   const meaningful = words.filter(
     (w) => /\d/.test(w) || !SEARCH_STOPWORDS.has(w.toLowerCase().replace(/[^a-z']/g, ""))
   );
-  return (meaningful.length ? meaningful : words).slice(0, 8).join(" ");
+  const pool = meaningful.length ? meaningful : words;
+  if (pool.length <= SEARCH_MAX_TERMS) return pool.join(" ");
+  // Too many words: keep every part number, fill the rest in the order typed. Cutting at
+  // the first eight words dropped the number from "my furnace stopped working last night
+  // and the tech said I need 0130F00506", which is the one word that names the part.
+  const codes = new Set(pool.filter(isPartCodeTerm).slice(0, SEARCH_MAX_TERMS));
+  const others = new Set(pool.filter((w) => !codes.has(w)).slice(0, SEARCH_MAX_TERMS - codes.size));
+  return pool.filter((w) => codes.has(w) || others.has(w)).join(" ");
 }
 
 // Shopify's Storefront products(query:) ANDs every term and does not reliably stem,
@@ -1107,6 +1147,8 @@ function buildShopifySearchQuery(userText) {
 // So when a search comes back empty we retry progressively narrower, dropping the
 // least-identifying words first and always keeping part numbers.
 const SHOPIFY_SEARCH_ATTEMPTS = 5;
+// Plus up to this many single-part-number searches once the ladder runs out.
+const SHOPIFY_CODE_ATTEMPTS = 2;
 
 // Narrowing one word at a time never reaches the useful end of a long question: a
 // six-term query would stop at three terms and still find nothing. Step down fast
@@ -1196,7 +1238,29 @@ function buildShopifySearchCandidates(userText) {
     if (narrowed && !candidates.includes(narrowed)) candidates.push(narrowed);
   }
 
-  return candidates.slice(0, SHOPIFY_SEARCH_ATTEMPTS);
+  // Then each part number on its own. The ladder narrows to the single best-weighted
+  // term, so a customer who gives two or three numbers ("VX-1000Ci, 151-1026-00,
+  // RUPA-004910") was only matched if that one was in the catalog. These run only when
+  // every search above came back empty.
+  const codes = terms.filter(isPartCodeTerm);
+  for (const term of codes) {
+    if (!candidates.includes(term)) candidates.push(term);
+  }
+  const out = candidates.slice(0, SHOPIFY_SEARCH_ATTEMPTS + SHOPIFY_CODE_ATTEMPTS);
+
+  // Last, the words without the numbers. A number we don't list - very often the
+  // customer's UNIT model, which no part names - rides along on every rung above, so
+  // "replacement fan motor for Goodman outdoor ac unit VSX130361EH" found nothing at all,
+  // when the words alone find the Goodman outdoor fan motors we do sell. Only when the
+  // words still name a kind of part plus something else: a brand alone ("honeywell") or
+  // filler ("serial", "cross reference") would hand the model a list of unrelated products.
+  if (codes.length) {
+    const words = terms.filter((term) => !isPartCodeTerm(term) && searchTermWeight(term) > 0);
+    const namesAPart = words.some((term) => searchTermWeight(term) === 1);
+    const query = words.join(" ");
+    if (words.length >= 2 && namesAPart && !out.includes(query)) out.push(query);
+  }
+  return out;
 }
 
 // How many catalog candidates to ASK Shopify for, and how many to actually put in
