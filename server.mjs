@@ -1120,19 +1120,24 @@ function withoutPackagingSuffix(term) {
 // couldn't find HONQ3400A1024" for an in-stock part. The bare number is only tried after the
 // number as typed found nothing, and a hit only counts when the listing names the bare number
 // (see namesCode), so a wrong strip cannot put an unrelated product in front of the model.
-const MAKER_PREFIX = /^([A-Za-z&]{3})([A-Za-z0-9].*)$/;
-// Maker codes seen on the supplier's own product pages (2026-10-08). An all-digit remainder
-// ("AMT700-30" -> "700-30", "B&G103251" -> "103251") is only trusted behind one of these, so
-// "XYZ1234" is never read as part "1234". Letters-and-digits remainders need no list.
-const KNOWN_MAKER_CODES = new Set(["ALN", "AMT", "ANT", "AOS", "ARG", "ASC", "AST", "B&G", "B&J", "BAC", "BAR", "BAS", "BDW", "BEC", "BEL", "BRA", "CAL", "CAR", "CLE", "CON", "DAN", "DUN", "FIE", "FIR", "GRU", "HOF", "HON", "ICM", "JOH", "LAN", "LEN", "LOC", "MAX", "MCM", "MOD", "NOR", "QUI", "RAN", "RBS", "REZ", "RIB", "SCU", "SUN", "TAC", "TEK", "TJE", "TRA", "TRI", "UTI", "WAT", "WES"]);
+const MAKER_PREFIX = /^([A-Za-z&-]{3})([A-Za-z0-9].*)$/;
+// Every maker code the supplier's catalog uses (all 9,349 of its pages read 2026-10-08: 8,803
+// catalog numbers are exactly code + part number, 84 codes). An all-digit remainder
+// ("AMT700-30" -> "700-30", "B&G103251" -> "103251"), or a code with a hyphen ("W-R" =
+// White-Rodgers), is only trusted behind one of these, so "XYZ1234" is never read as part
+// "1234". Letters-and-digits remainders behind three plain letters need no list.
+const KNOWN_MAKER_CODES = new Set(["ALN", "AMT", "ANT", "AOS", "ARG", "ASC", "AST", "B&G", "B&J", "BAC", "BAR", "BAS", "BDW", "BEC", "BEL", "BRA", "BUR", "CAL", "CAR", "CLE", "CON", "CRR", "DAN", "DUN", "EFC", "ERI", "FEN", "FEY", "FIE", "FIO", "FIR", "FSC", "GAR", "GCV", "GDM", "GEN", "GRU", "HAG", "HOF", "HON", "HSI", "ICM", "ICP", "JOH", "KMC", "LAN", "LEN", "LOC", "LUX", "MAX", "MCM", "MOD", "NEC", "NOR", "OEM", "PAR", "PKR", "QUI", "RAN", "RAY", "RBS", "REZ", "RHE", "RHW", "RIB", "SAF", "SCU", "SKU", "SPI", "SUN", "TAC", "TEK", "TEL", "TJE", "TRA", "TRI", "USM", "W-R", "WAT", "WEB", "WEI", "WES", "YOR", "ZON"]);
 function withoutMakerPrefix(term) {
   const match = MAKER_PREFIX.exec(String(term || ""));
   if (!match || !isPartCodeTerm(term)) return term;
+  const code = match[1].toUpperCase();
+  const known = KNOWN_MAKER_CODES.has(code);
+  if (code.includes("-") && !known) return term;
   const rest = match[2];
   const alnum = rest.replace(/[^A-Za-z0-9]/g, "");
   if (alnum.length < 4 || !/\d/.test(alnum)) return term;
   if (/[A-Za-z]/.test(alnum)) return isPartCodeTerm(rest) ? rest : term;
-  return KNOWN_MAKER_CODES.has(match[1].toUpperCase()) ? rest : term;
+  return known ? rest : term;
 }
 // Part numbers in the message that only make sense with the maker code (and any packaging
 // suffix) taken off: [{ asked: "HONQ3400A1024", bare: "Q3400A1024" }].
