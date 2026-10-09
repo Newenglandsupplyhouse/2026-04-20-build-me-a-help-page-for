@@ -1727,7 +1727,7 @@ async function getShopifyProductContext(conversation, options = {}) {
   for (const { asked, bare } of prefixed) {
     if (!usedQueries.some((q) => q.split(" ").includes(bare)) || !products.some((p) => namesCode(p, bare))) continue;
     // Never name the supplier: "a distributor catalog number" is all the customer needs to hear.
-    lines.push(`Note: "${asked}" is a distributor catalog number - the maker code "${asked.slice(0, 3)}" in front of the part number "${bare}". A listing that names ${bare} IS the part the customer asked for.`);
+    lines.push(`Note: "${asked}" is a distributor catalog number - the maker code "${asked.slice(0, 3)}" in front of the part number "${bare}". A listing that names ${bare} IS the part the customer asked for. Call it by the listing's own number (${bare}); do not say it is listed as "${asked}".`);
   }
   for (const asked of new Set(latestUserMessage.split(/\s+/).map((w) => w.replace(/[?!.,;:]+$/, "")))) {
     const bare = withoutPackagingSuffix(asked);
