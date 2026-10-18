@@ -11,7 +11,7 @@ CAP='style="font-size:.9rem;color:#64748b;margin-top:.45rem"'
 def hero(p):
     if p["kind"]=="chipper":
         return (f'<figure data-nesh-photo="hero" style="margin:0 0 1.4rem"><img src="{BA}" alt="Before and after: a worn wood chipper catalytic converter next to the same unit rebuilt by New England Supply House" loading="eager" {IMG}>'
-                f'<figcaption {CAP}>Representative photo: a customer&rsquo;s worn wood chipper converter and the same unit after rebuild. Your converter will differ by machine and engine.</figcaption></figure>\n')
+                f'<figcaption data-nesh-note="rep" style="margin:.6rem 0 0;max-width:720px;padding:.7rem 1rem;background:rgba(240,180,41,.16);border-left:5px solid #f0b429;border-radius:8px;color:#14213d;font-weight:700;font-size:1.02rem;line-height:1.35">Representative photo: Your converter will differ by machine and engine.</figcaption></figure>\n')
     return (f'<figure data-nesh-photo="hero" style="margin:0 0 1.4rem"><img src="{DCL}" alt="DCL Mine-X industrial catalytic converter after rebuild, with new welded inlet pipe" loading="eager" {IMG}>'
             f'<figcaption {CAP}>A DCL Mine-X canister converter after rebuild and re-pipe at our shop. <a href="{DCL_URL}" style="font-weight:700">Order the industrial rebuild &amp; re-pipe online</a> or call for a quote.</figcaption></figure>\n')
 def card(p):
