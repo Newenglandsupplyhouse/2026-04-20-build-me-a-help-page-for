@@ -1,11 +1,12 @@
 # Draft listing: Industrial Catalytic Converter Rebuild & Re-Pipe (DCL Mine-X and similar)
 
-Status: NOT yet created in Shopify. Intended as a DRAFT product (unpublished) for review.
+Status: created in Shopify as a DRAFT (unpublished), product 9382347636958.
 
 - Vendor: New England Supply House
 - Product type: Industrial Equipment Parts
 - Tags: catalytic-converter, rebuild, re-pipe, industrial-equipment, dcl, mine-x, generator, forklift, wood-chipper
-- Price: placeholder 0.00 (quoted per unit)
+- Collection: Replacement Catalytic Converters (Bandit, Morbark, Vermeer)
+- Price: $2,000.00
 - Images, in order: 10 (bench, full), 04 (full on white), 11 (inlet weld), 08 (outlet pipe), 05 (data plate)
 - SEO title: Industrial Catalytic Converter Rebuild & Re-Pipe | DCL Mine-X
 - SEO description: Rebuild and re-pipe service for DCL Mine-X and similar industrial catalytic converters. New welded inlet and outlet pipes, substrate inspection, quoted per unit.
@@ -25,4 +26,4 @@ Send us your existing converter. New England Supply House inspects the shell and
 ### Before you order
 Photograph the data plate on the side of the converter. It carries the DCL model number (for example 560GX-MT-020D-0C74-01), the serial number, and the flow arrow. Note the inlet and outlet pipe diameters you need. Call New England Supply House at 774-701-6374 with those details and we will confirm fit, price, and turnaround before you ship.
 
-*Pricing is quoted per unit after inspection. The price shown is a placeholder until your quote is confirmed.*
+*Price covers the rebuild and re-pipe of one converter. Call before ordering so we can confirm your pipe sizes and turnaround.*
