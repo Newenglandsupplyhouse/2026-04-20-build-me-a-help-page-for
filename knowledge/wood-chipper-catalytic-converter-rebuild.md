@@ -12,6 +12,8 @@ New England Supply House rebuilds catalytic converters for Bandit, Morbark, and 
 
 Prices, gas vs. diesel options, and turnaround are on the product pages. Use the live store data for those, never memory.
 
+Chipper rebuilds are ordered online, not quoted. Every chipper model page on the site (for example /pages/bandit-intimidator-18xp-catalytic-converter-rebuild) has "Order the gas rebuild" and "Order the diesel rebuild" buttons that go straight to the right product. Send customers to the product or model page to buy; do not offer to prepare a quote for a wood chipper converter. Makes other than Bandit, Morbark, and Vermeer (Carlton, Altec, Rayco, Woodsman) order the same rebuild from the replacement converter listing and name their machine in the order notes.
+
 ## What is included in a rebuild
 
 - The customer's converter shell, cleaned and inspected
