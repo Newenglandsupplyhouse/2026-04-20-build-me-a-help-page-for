@@ -14,6 +14,8 @@ Prices, gas vs. diesel options, and turnaround are on the product pages. Use the
 
 Chipper rebuilds are ordered online, not quoted. Every chipper model page on the site (for example /pages/bandit-intimidator-18xp-catalytic-converter-rebuild) has "Order the gas rebuild" and "Order the diesel rebuild" buttons that go straight to the right product. Send customers to the product or model page to buy; do not offer to prepare a quote for a wood chipper converter. Makes other than Bandit, Morbark, and Vermeer (Carlton, Altec, Rayco, Woodsman and anything else) are call-for-quote: ask for make, model, and engine and direct the customer to call 774-701-6374.
 
+Photos on the site are representative. A customer's converter may look very different depending on the machine and engine, so never identify a converter from a site photo.
+
 ## What is included in a rebuild
 
 - The customer's converter shell, cleaned and inspected
