@@ -3,7 +3,7 @@ sys.path.insert(0, ".")
 from shopify_upload import gql
 SC="./"
 pages=json.load(open(SC+"all_pages.json")); models=json.load(open(SC+"models.json"))
-BA="https://cdn.shopify.com/s/files/1/0725/0034/7102/files/before-after-full.jpg?v=1792282660"
+BA="https://cdn.shopify.com/s/files/1/0725/0034/7102/files/before-after-full-note.jpg?v=1792290261"
 DCL="https://cdn.shopify.com/s/files/1/0725/0034/7102/files/10-dcl-minex-bench-full.jpg?v=1792284622"
 DCL_URL="/products/industrial-catalytic-converter-rebuild-re-pipe-dcl-mine-x-and-similar"
 IMG='style="width:100%;max-width:720px;display:block;border:1px solid #e2e8f0;border-radius:12px;background:#fff"'
