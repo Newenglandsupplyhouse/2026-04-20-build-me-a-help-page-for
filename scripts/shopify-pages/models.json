@@ -1,0 +1,172 @@
+{
+ "bandit": {
+  "id": "gid://shopify/Product/9237990408414",
+  "options": [
+   {
+    "name": "Fuel Type",
+    "values": [
+     "Gas",
+     "Diesel"
+    ]
+   }
+  ],
+  "variants": [
+   [
+    "Gas",
+    "1350.00"
+   ],
+   [
+    "Diesel",
+    "1750.00"
+   ]
+  ],
+  "table": [
+   [
+    "Model",
+    "Engine",
+    "Horsepower"
+   ],
+   [
+    "Intimidator 18XP (1590XP)",
+    "Cat C4.4 ACERT Diesel",
+    "147-174 hp"
+   ],
+   [
+    "Intimidator 19XP (1890XP)",
+    "Cat C4.4 / C7.1 ACERT Diesel",
+    "174-225 hp"
+   ],
+   [
+    "Intimidator 19XPC",
+    "Cat C4.4 / C7.1 ACERT Diesel",
+    "174-225 hp"
+   ],
+   [
+    "Intimidator 21XP (1990XP)",
+    "Cat C7.1 ACERT Diesel",
+    "275 hp"
+   ]
+  ],
+  "handle": "bandit-wood-chipper-catalytic-converter-rebuild",
+  "variant_ids": {
+   "Gas": "48560899948766",
+   "Diesel": "48560899981534"
+  },
+  "card_url": "https://cdn.shopify.com/s/files/1/0725/0034/7102/files/included-bandit_397d9147-e0a0-45e4-8ad6-6de61504e0b2.jpg?v=1792283846"
+ },
+ "morbark": {
+  "id": "gid://shopify/Product/9237990473950",
+  "options": [
+   {
+    "name": "Fuel Type",
+    "values": [
+     "Gas",
+     "Diesel"
+    ]
+   }
+  ],
+  "variants": [
+   [
+    "Gas",
+    "1350.00"
+   ],
+   [
+    "Diesel",
+    "1750.00"
+   ]
+  ],
+  "table": [
+   [
+    "Model",
+    "Gas Engine",
+    "Diesel Engine"
+   ],
+   [
+    "Eeger Beever 1821",
+    "Ford 6.2L V8",
+    "Cat C4.4 ACERT"
+   ],
+   [
+    "Eeger Beever 1922",
+    "Ford 6.2L V8",
+    "Cat C4.4 ACERT"
+   ],
+   [
+    "Eeger Beever 2131",
+    "Ford 6.2L V8",
+    "Cat C4.4 ACERT"
+   ],
+   [
+    "Beever M18R / M18RX",
+    "Ford 6.2L V8",
+    "Cat C4.4 / C7.1 ACERT"
+   ],
+   [
+    "BVR16",
+    "PSI 6.0L V8",
+    "Cat C4.4 ACERT"
+   ],
+   [
+    "BVR19",
+    "PSI 6.0L V8",
+    "Cat C4.4 / C7.1 ACERT"
+   ]
+  ],
+  "handle": "morbark-wood-chipper-catalytic-converter-rebuild",
+  "variant_ids": {
+   "Gas": "48560900014302",
+   "Diesel": "48560900047070"
+  },
+  "card_url": "https://cdn.shopify.com/s/files/1/0725/0034/7102/files/included-morbark_b19c2ea2-d2bc-44d7-9a07-e581506c40f8.jpg?v=1792283854"
+ },
+ "vermeer": {
+  "id": "gid://shopify/Product/9237990506718",
+  "options": [
+   {
+    "name": "Fuel Type",
+    "values": [
+     "Gas",
+     "Diesel"
+    ]
+   }
+  ],
+  "variants": [
+   [
+    "Gas",
+    "1350.00"
+   ],
+   [
+    "Diesel",
+    "1750.00"
+   ]
+  ],
+  "table": [
+   [
+    "Model",
+    "Engine",
+    "Horsepower"
+   ],
+   [
+    "BC1000XL",
+    "Deutz D2.9L / TD2.9L Tier 4 Final Diesel",
+    "49-74 hp"
+   ],
+   [
+    "BC1800XL",
+    "John Deere 4045HFC09 / 4045HFC04 ? Cummins F3.8 Diesel",
+    "134-173 hp"
+   ],
+   [
+    "BC2100XL",
+    "Cummins QSB 6.7L Diesel",
+    "275 hp"
+   ]
+  ],
+  "handle": "vermeer-wood-chipper-catalytic-converter-rebuild",
+  "variant_ids": {
+   "Gas": "48560900866270",
+   "Diesel": "48560900899038"
+  },
+  "card_url": "https://cdn.shopify.com/s/files/1/0725/0034/7102/files/included-vermeer_be504949-9b39-45bf-a0c6-e35a56b6a662.jpg?v=1792283861"
+ }
+}
