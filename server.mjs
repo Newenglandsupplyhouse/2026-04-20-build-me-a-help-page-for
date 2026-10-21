@@ -7,6 +7,9 @@ import {
   loadConfig, saveConfig, checkLimits, overDailyCap, resolveTool, isTool, TOOLS,
   CONFIG_FIELDS, configVersion, listHistory, getHistory, restoreVersion, ensureBaseline
 } from "./finder-config.mjs";
+import {
+  isStockAsk, STOCK_BUTTON_NOTE, stockCheckOffer, stockCheckRejection, runStockCheck, stockCheckSummary
+} from "./stock-check.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1900,6 +1903,11 @@ async function createOpenAIResponse(conversation, cfg = null, options = {}) {
   }));
 
   const shopifyContext = await getShopifyProductContext(conversation, { tool: options.tool });
+  // A stock question: point the customer at the live-check button instead of letting the
+  // model imply it checked anything. Only on these turns, so every other answer is unchanged.
+  if (isStockAsk(getLatestUserMessage(conversation))) {
+    input.unshift({ role: "system", content: [{ type: "input_text", text: STOCK_BUTTON_NOTE }] });
+  }
   if (shopifyContext?.text) {
     input.unshift({
       role: "system",
@@ -2613,10 +2621,16 @@ const server = createServer(async (request, response) => {
         finalReply = `${base}\n\nI'm not finding a document on file that matches that exact model — double-check the model number and I'll take another look.`.trim();
       }
 
+      // "Check real-time stock" button: offered for the in-stock products this reply links.
+      // Nothing is checked until the customer taps it (POST /api/stock-check).
+      const stockCheck = await stockCheckOffer(conversation, finalReply, getLatestUserMessage(conversation))
+        .catch(() => null);
+
       const result = {
         reply: finalReply,
         usedTools: usedSources ? `Used ${usedSources.replace(/^Used /, "")}` : "",
-        documents: shownDocuments
+        documents: shownDocuments,
+        ...(stockCheck ? { stockCheck } : {})
       };
 
       if (wantsStream) {
@@ -2645,6 +2659,40 @@ const server = createServer(async (request, response) => {
       } else {
         sendJson(response, 500, { error: error.message }, origin);
       }
+      return;
+    }
+  }
+
+  // The "Check real-time stock" button. Body: { handles, sessionId, tool }. The handles
+  // are only a pointer: stock-check.mjs looks each product up again, reads the supplier's
+  // live stock through the cart-automation service, and writes the answer itself.
+  if (request.method === "POST" && requestUrl.pathname === "/api/stock-check") {
+    try {
+      const ip = (request.headers["x-forwarded-for"] || "").split(",")[0].trim()
+        || request.socket.remoteAddress || "unknown";
+      const rejection = stockCheckRejection(ip);
+      if (rejection) {
+        sendJson(response, 429, { error: rejection }, origin);
+        return;
+      }
+
+      const parsed = await readJsonBody(request, 10 * 1024);
+      const handles = Array.isArray(parsed.handles) ? parsed.handles.slice(0, 3) : [];
+      if (!handles.length) {
+        sendJson(response, 400, { error: "Nothing to check." }, origin);
+        return;
+      }
+
+      const { reply, rows } = await runStockCheck(handles);
+      sendJson(response, 200, { reply }, origin);
+
+      if (!String(parsed.sessionId || "").startsWith("TEST-")) {
+        const asked = [{ role: "user", content: `[Real-time stock check] ${rows.map((r) => r.title).join(" | ") || handles.join(" | ")}` }];
+        logChatToCrm(asked, reply, stockCheckSummary(rows), [], parsed.sessionId, resolveTool(parsed.tool), null);
+      }
+      return;
+    } catch (error) {
+      sendJson(response, 500, { error: "Stock check failed." }, origin);
       return;
     }
   }
