@@ -889,6 +889,7 @@
     function sourceLabel(v) {
       if (v.source === "admin") return "Saved in this panel";
       if (v.source === "api") return "Changed through the API (e.g. by Claude)";
+      if (v.source === "iws") return "Approved in IW Scheduler (Ask tab)";
       if (v.source === "restore") return "Restored the version from " + idWhen(v.restoredFrom);
       if (v.source === "baseline") return "What was live when history began";
       return v.source || "";

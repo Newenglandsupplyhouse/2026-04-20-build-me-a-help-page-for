@@ -2,10 +2,14 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createPublicKey, verify as verifySignature } from "node:crypto";
 import {
   loadConfig, saveConfig, checkLimits, overDailyCap, resolveTool, isTool, TOOLS,
   CONFIG_FIELDS, configVersion, listHistory, getHistory, restoreVersion, ensureBaseline
 } from "./finder-config.mjs";
+import {
+  isStockAsk, STOCK_BUTTON_NOTE, stockCheckOffer, stockCheckRejection, runStockCheck, stockCheckSummary
+} from "./stock-check.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1112,6 +1116,64 @@ function stripCodeSuffix(code) {
   return base !== code && base.replace(/-/g, "").length >= 4 ? base : "";
 }
 
+// Packaging suffixes. Resideo / Honeywell Home catalog numbers end in "/U" (other makers
+// use a letter or two the same way): the box and Resideo's site say Q3400A1024/U, the
+// supplier feed and our listing say Q3400A1024. Shopify never matches one to the other, so
+// the finder and the site search told a customer we didn't carry a part with 69 in stock
+// (SKU 2405, 2026-10-08). Fractions ("3/4", "UPS50-40/4") end in a digit and never match.
+const PACKAGING_SUFFIX = /^(.*\d.*)\/([A-Za-z]{1,2})$/;
+function withoutPackagingSuffix(term) {
+  const match = PACKAGING_SUFFIX.exec(String(term || ""));
+  return match && isPartCodeTerm(term) && isPartCodeTerm(match[1]) ? match[1] : term;
+}
+
+// Distributor catalog numbers. The supplier's catalog writes a 3-character maker code in front
+// of the maker's part number - HONQ3400A1024 is HON + Q3400A1024, B&GNRF-22 is B&G + NRF-22
+// (981 of the first 1,100 catalog numbers read on 2026-10-08 are exactly that). Customers copy
+// them off a quote or an invoice, our listings never carry them, and the finder answered "I
+// couldn't find HONQ3400A1024" for an in-stock part. The bare number is only tried after the
+// number as typed found nothing, and a hit only counts when the listing names the bare number
+// (see namesCode), so a wrong strip cannot put an unrelated product in front of the model.
+const MAKER_PREFIX = /^([A-Za-z&-]{3})([A-Za-z0-9].*)$/;
+// Every maker code the supplier's catalog uses (all 9,349 of its pages read 2026-10-08: 8,803
+// catalog numbers are exactly code + part number, 84 codes). An all-digit remainder
+// ("AMT700-30" -> "700-30", "B&G103251" -> "103251"), or a code with a hyphen ("W-R" =
+// White-Rodgers), is only trusted behind one of these, so "XYZ1234" is never read as part
+// "1234". Letters-and-digits remainders behind three plain letters need no list.
+const KNOWN_MAKER_CODES = new Set(["ALN", "AMT", "ANT", "AOS", "ARG", "ASC", "AST", "B&G", "B&J", "BAC", "BAR", "BAS", "BDW", "BEC", "BEL", "BRA", "BUR", "CAL", "CAR", "CLE", "CON", "CRR", "DAN", "DUN", "EFC", "ERI", "FEN", "FEY", "FIE", "FIO", "FIR", "FSC", "GAR", "GCV", "GDM", "GEN", "GRU", "HAG", "HOF", "HON", "HSI", "ICM", "ICP", "JOH", "KMC", "LAN", "LEN", "LOC", "LUX", "MAX", "MCM", "MOD", "NEC", "NOR", "OEM", "PAR", "PKR", "QUI", "RAN", "RAY", "RBS", "REZ", "RHE", "RHW", "RIB", "SAF", "SCU", "SKU", "SPI", "SUN", "TAC", "TEK", "TEL", "TJE", "TRA", "TRI", "USM", "W-R", "WAT", "WEB", "WEI", "WES", "YOR", "ZON"]);
+function withoutMakerPrefix(term) {
+  const match = MAKER_PREFIX.exec(String(term || ""));
+  if (!match || !isPartCodeTerm(term)) return term;
+  const code = match[1].toUpperCase();
+  const known = KNOWN_MAKER_CODES.has(code);
+  if (code.includes("-") && !known) return term;
+  const rest = match[2];
+  const alnum = rest.replace(/[^A-Za-z0-9]/g, "");
+  if (alnum.length < 4 || !/\d/.test(alnum)) return term;
+  if (/[A-Za-z]/.test(alnum)) return isPartCodeTerm(rest) ? rest : term;
+  return known ? rest : term;
+}
+// Part numbers in the message that only make sense with the maker code (and any packaging
+// suffix) taken off: [{ asked: "HONQ3400A1024", bare: "Q3400A1024" }].
+function makerPrefixCodes(userText) {
+  const out = [];
+  for (const word of String(userText || "").split(/\s+/)) {
+    const asked = word.replace(/[?!.,;:]+$/, "");
+    const unprefixed = withoutMakerPrefix(asked);
+    if (unprefixed === asked) continue;
+    const bare = withoutPackagingSuffix(unprefixed);
+    if (!out.some((d) => d.bare === bare)) out.push({ asked, bare });
+  }
+  return out;
+}
+// Does this listing name the part number (title, tags or SKU), punctuation ignored?
+function namesCode(product, code) {
+  const squished = String(code || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const fields = [product.title, ...(product.tags || []), ...(product.variants?.nodes || []).map((v) => v.sku)]
+    .map((s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, ""));
+  return fields.some((field) => containsCode(field, squished));
+}
+
 const SEARCH_MAX_TERMS = 8;
 
 function buildShopifySearchQuery(userText) {
@@ -1262,15 +1324,33 @@ function buildShopifySearchCandidates(userText) {
   // "626602*". Shopify matches whole words, so a revision letter the customer typed and
   // the title lacks - or the reverse - is a miss; the prefix finds the bare number, the
   // "R" and the "RS" listing alike. Verified 2026-10-27 against the Storefront API:
-  // "626602r" returned nothing, "626602*" the Nordyne 626602 limit switch. Search syntax
-  // stays out of the term (a leading "-" would mean NOT).
+  // "626602r" returned nothing, "626602*" the Nordyne 626602 limit switch. Built from
+  // the number with any packaging suffix already off, and search syntax stays out of
+  // the term (a leading "-" would mean NOT).
   for (const term of codes) {
-    const clean = term.replace(/[^A-Za-z0-9-]/g, "").replace(/^-+|-+$/g, "");
+    const clean = withoutPackagingSuffix(term).replace(/[^A-Za-z0-9-]/g, "").replace(/^-+|-+$/g, "");
     if (!clean) continue;
     const prefix = `${stripCodeSuffix(clean) || clean}*`;
     if (!candidates.includes(prefix)) candidates.push(prefix);
   }
-  const out = candidates.slice(0, SHOPIFY_SEARCH_ATTEMPTS + SHOPIFY_CODE_ATTEMPTS);
+  const capped = candidates.slice(0, SHOPIFY_SEARCH_ATTEMPTS + SHOPIFY_CODE_ATTEMPTS);
+
+  // Each rung that carries a packaging suffix ("Q3400A1024/U") or a catalog maker code
+  // ("HONQ3400A1024") is retried without it right after, before any narrower rung: the
+  // customer's own wording still goes first, so a listing that names the number as typed
+  // keeps matching it.
+  const out = [];
+  for (const candidate of capped) {
+    out.push(candidate);
+    const words = candidate.split(" ");
+    const bare = words.map(withoutPackagingSuffix).join(" ");
+    // Maker codes come off only on a part-number-only rung (the ladder always reaches one), so a
+    // long message is not searched twice over.
+    const unprefixed = words.length === 1 ? withoutPackagingSuffix(withoutMakerPrefix(words[0])) : candidate;
+    for (const variant of [bare, unprefixed]) {
+      if (variant !== candidate && !capped.includes(variant) && !out.includes(variant)) out.push(variant);
+    }
+  }
 
   // Last, the words without the numbers. A number we don't list - very often the
   // customer's UNIT model, which no part names - rides along on every rung above, so
@@ -1635,8 +1715,13 @@ async function getShopifyProductContext(conversation, options = {}) {
   const pool = new Map();
   const usedQueries = [];
   let namedTheProduct = false;
+  const prefixed = makerPrefixCodes(latestUserMessage);
   for (const candidate of searchCandidates) {
-    const results = await runSearch(candidate);
+    let results = await runSearch(candidate);
+    // A rung searched on a number with its maker code taken off only keeps listings that name
+    // that number - "VSX130361EH" -> "130361EH" must not pull in whatever else matches.
+    const required = prefixed.filter((d) => candidate.split(" ").includes(d.bare));
+    if (required.length) results = results.filter((product) => required.every((d) => namesCode(product, d.bare)));
     usedQueries.push(candidate);
     for (const product of results) {
       const key = product.handle || product.id;
@@ -1645,14 +1730,16 @@ async function getShopifyProductContext(conversation, options = {}) {
     }
     if (pool.size && (!productWords.length || namedTheProduct)) break;
   }
-  const askedCodes = productQueryTokens(latestUserMessage).codes;
+  // Rank and fit on the bare numbers too: a title says "Q3400A1024", never "HONQ3400A1024".
+  const rankText = [latestUserMessage, ...prefixed.map((d) => d.bare)].join(" ");
+  const askedCodes = productQueryTokens(rankText).codes;
   for (const product of await siteSearch) {
     if (!pool.has(product.handle) && siteResultFits(product, tool, askedCodes)) pool.set(product.handle, product);
   }
   const matched = [...pool.values()];
   const usedQuery = usedQueries.join(" / ");
 
-  const products = rankProductsForQuery(matched, latestUserMessage, SHOPIFY_CONTEXT_PRODUCTS);
+  const products = rankProductsForQuery(matched, rankText, SHOPIFY_CONTEXT_PRODUCTS);
   // Lamp finder only: the air-filter lookup rides alongside the ordinary results. The HVAC
   // finder never reaches this, so its context is byte-for-byte what it was.
   const filterBlock = tool === "lamp" && wantsLampFilterSearch(conversation)
@@ -1670,6 +1757,20 @@ async function getShopifyProductContext(conversation, options = {}) {
   const lines = [
     `Live Shopify product search results for "${latestUserMessage}" using query "${usedQuery}":`
   ];
+  // Say so when a match came from dropping a packaging suffix, or the model hedges the
+  // exact part into a "closest match" because the title lacks the "/U".
+  for (const { asked, bare } of prefixed) {
+    if (!usedQueries.some((q) => q.split(" ").includes(bare)) || !products.some((p) => namesCode(p, bare))) continue;
+    // Never name the supplier: "a distributor catalog number" is all the customer needs to hear.
+    lines.push(`Note: "${asked}" is a distributor catalog number - the maker code "${asked.slice(0, 3)}" in front of the part number "${bare}". A listing that names ${bare} IS the part the customer asked for. Call it by the listing's own number (${bare}); do not say it is listed as "${asked}".`);
+  }
+  for (const asked of new Set(latestUserMessage.split(/\s+/).map((w) => w.replace(/[?!.,;:]+$/, "")))) {
+    const bare = withoutPackagingSuffix(asked);
+    if (bare === asked || prefixed.some((d) => d.asked === asked) || !usedQueries.some((q) => q.split(" ").includes(bare))) continue;
+    lines.push(/\/u$/i.test(asked)
+      ? `Note: "${asked}" was searched as "${bare}". "/U" is the manufacturer's packaging code, so a listing for ${bare} IS the part the customer asked for.`
+      : `Note: "${asked}" was searched as "${bare}" (without the "${asked.slice(bare.length)}" ending). Name the exact number the listing shows.`);
+  }
 
   for (const product of products) {
     const crossRefs = crossReferenceTags(product);
@@ -1834,6 +1935,11 @@ async function createOpenAIResponse(conversation, cfg = null, options = {}) {
   }));
 
   const shopifyContext = await getShopifyProductContext(conversation, { tool: options.tool });
+  // A stock question: point the customer at the live-check button instead of letting the
+  // model imply it checked anything. Only on these turns, so every other answer is unchanged.
+  if (isStockAsk(getLatestUserMessage(conversation))) {
+    input.unshift({ role: "system", content: [{ type: "input_text", text: STOCK_BUTTON_NOTE }] });
+  }
   if (shopifyContext?.text) {
     input.unshift({
       role: "system",
@@ -1962,6 +2068,58 @@ function adminAuthed(request) {
   return dec.slice(dec.indexOf(":") + 1) === ADMIN_PASSWORD;
 }
 
+// IW Scheduler (Jason's ops app) manages both finders from its Ask tab. It signs each
+// admin request with a P-256 key it generated for itself; only the PUBLIC half lives
+// here, in IWS_PUBLIC_JWK (published at <iws>/api/finder/key). So no password is shared,
+// and a leaked env var can't be used to write anything.
+// Each token is bound to one method + path, lives about a minute, and is accepted once.
+// It reaches the config, version-history, restore and chat-log routes, nothing else —
+// not the knowledge-base uploads or deletes.
+const IWS_ROUTES = /^\/admin\/api\/(config|config\/history|config\/history\/[\w-]+|config\/restore|logs)$/;
+const IWS_CLOCK_SKEW_S = 30;
+let iwsPublicKey = null;
+if (process.env.IWS_PUBLIC_JWK) {
+  try {
+    iwsPublicKey = createPublicKey({ key: JSON.parse(process.env.IWS_PUBLIC_JWK), format: "jwk" });
+  } catch (error) {
+    console.error(`IWS_PUBLIC_JWK is set but unreadable, so IW Scheduler can't reach the admin API: ${error.message}`);
+  }
+}
+const iwsSeenTokens = new Map();   // jti -> exp (seconds); a replayed token is refused
+
+function iwsAuthed(request, requestUrl) {
+  if (!iwsPublicKey) return false;
+  const h = request.headers.authorization || "";
+  if (!h.startsWith("IWS ")) return false;
+  const parts = h.slice(4).trim().split(".");
+  if (parts.length !== 3) return false;
+  let header;
+  let claims;
+  try {
+    header = JSON.parse(Buffer.from(parts[0], "base64url").toString());
+    claims = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+  } catch {
+    return false;
+  }
+  if (header?.alg !== "ES256") return false;
+  const signed = verifySignature(
+    "sha256",
+    Buffer.from(`${parts[0]}.${parts[1]}`),
+    { key: iwsPublicKey, dsaEncoding: "ieee-p1363" },
+    Buffer.from(parts[2], "base64url")
+  );
+  if (!signed) return false;
+  const now = Math.floor(Date.now() / 1000);
+  if (claims.aud !== "finder-admin") return false;
+  if (typeof claims.exp !== "number" || claims.exp + IWS_CLOCK_SKEW_S < now || claims.exp > now + 300) return false;
+  if (claims.m !== request.method || claims.p !== requestUrl.pathname + requestUrl.search) return false;
+  if (!IWS_ROUTES.test(requestUrl.pathname)) return false;
+  if (typeof claims.jti !== "string" || claims.jti.length < 16 || iwsSeenTokens.has(claims.jti)) return false;
+  for (const [jti, exp] of iwsSeenTokens) if (exp + IWS_CLOCK_SKEW_S < now) iwsSeenTokens.delete(jti);
+  iwsSeenTokens.set(claims.jti, claims.exp);
+  return true;
+}
+
 async function openAiAdmin(pathname, options = {}) {
   const res = await fetch(`https://api.openai.com${pathname}`, {
     ...options,
@@ -2078,6 +2236,10 @@ const server = createServer(async (request, response) => {
   const finderRoute = requestUrl.pathname.match(/^\/(finder|lamp-finder)\/?$/);
   if (request.method === "GET" && finderRoute) {
     const tool = finderRoute[1] === "lamp-finder" ? "lamp" : "hvac";
+    // 2026-10-27: this shell only ever renders inside the storefront iframe. Keep Google on
+    // the storefront pages (/pages/parts-finder, /pages/projector-lamp-finder), which carry
+    // the real copy, canonical and internal links — never on this bare onrender.com copy.
+    response.setHeader("X-Robots-Tag", "noindex");
     try {
       const template = await readFile(path.join(__dirname, "finder.html"), "utf8");
       sendHtml(response, 200, renderFinderPage(template, loadConfig(tool), tool), origin);
@@ -2154,7 +2316,7 @@ const server = createServer(async (request, response) => {
     const isToolsGet = request.method === "GET"
       && (requestUrl.pathname === "/admin/tools" || requestUrl.pathname === "/admin/tools/");
     const tokenOk = !!process.env.TOOLS_TOKEN && requestUrl.searchParams.get("k") === process.env.TOOLS_TOKEN;
-    if (!(adminAuthed(request) || (isToolsGet && tokenOk))) {
+    if (!(adminAuthed(request) || iwsAuthed(request, requestUrl) || (isToolsGet && tokenOk))) {
       response.writeHead(401, { "WWW-Authenticate": 'Basic realm="Parts Finder Admin"' });
       response.end("Authentication required");
       return;
@@ -2204,8 +2366,13 @@ const server = createServer(async (request, response) => {
       // two editors (the panel and an API call) can't silently undo each other.
       const staleBase = (body) => body._baseVersion && body._baseVersion !== configVersion(cfgTool);
       const STALE = "The finder was changed after you loaded it. Reload to see the newer version, then make your change again.";
-      // "admin" only when the panel says so; every other writer is recorded as the API.
-      const metaFrom = (body) => ({ source: body._source === "admin" ? "admin" : "api", note: body._note });
+      // "admin" only when the panel says so, "iws" only on a request IW Scheduler signed;
+      // every other writer is recorded as the API.
+      const viaIws = (request.headers.authorization || "").startsWith("IWS ");
+      const metaFrom = (body) => ({
+        source: body._source === "admin" ? "admin" : viaIws ? "iws" : "api",
+        note: body._note
+      });
 
       if (requestUrl.pathname === "/admin/api/config") {
         if (request.method === "GET") {
@@ -2490,10 +2657,16 @@ const server = createServer(async (request, response) => {
         finalReply = `${base}\n\nI'm not finding a document on file that matches that exact model — double-check the model number and I'll take another look.`.trim();
       }
 
+      // "Check real-time stock" button: offered for the in-stock products this reply links.
+      // Nothing is checked until the customer taps it (POST /api/stock-check).
+      const stockCheck = await stockCheckOffer(conversation, finalReply, getLatestUserMessage(conversation))
+        .catch(() => null);
+
       const result = {
         reply: finalReply,
         usedTools: usedSources ? `Used ${usedSources.replace(/^Used /, "")}` : "",
-        documents: shownDocuments
+        documents: shownDocuments,
+        ...(stockCheck ? { stockCheck } : {})
       };
 
       if (wantsStream) {
@@ -2522,6 +2695,40 @@ const server = createServer(async (request, response) => {
       } else {
         sendJson(response, 500, { error: error.message }, origin);
       }
+      return;
+    }
+  }
+
+  // The "Check real-time stock" button. Body: { handles, sessionId, tool }. The handles
+  // are only a pointer: stock-check.mjs looks each product up again, reads the supplier's
+  // live stock through the cart-automation service, and writes the answer itself.
+  if (request.method === "POST" && requestUrl.pathname === "/api/stock-check") {
+    try {
+      const ip = (request.headers["x-forwarded-for"] || "").split(",")[0].trim()
+        || request.socket.remoteAddress || "unknown";
+      const rejection = stockCheckRejection(ip);
+      if (rejection) {
+        sendJson(response, 429, { error: rejection }, origin);
+        return;
+      }
+
+      const parsed = await readJsonBody(request, 10 * 1024);
+      const handles = Array.isArray(parsed.handles) ? parsed.handles.slice(0, 3) : [];
+      if (!handles.length) {
+        sendJson(response, 400, { error: "Nothing to check." }, origin);
+        return;
+      }
+
+      const { reply, rows } = await runStockCheck(handles);
+      sendJson(response, 200, { reply }, origin);
+
+      if (!String(parsed.sessionId || "").startsWith("TEST-")) {
+        const asked = [{ role: "user", content: `[Real-time stock check] ${rows.map((r) => r.title).join(" | ") || handles.join(" | ")}` }];
+        logChatToCrm(asked, reply, stockCheckSummary(rows), [], parsed.sessionId, resolveTool(parsed.tool), null);
+      }
+      return;
+    } catch (error) {
+      sendJson(response, 500, { error: "Stock check failed." }, origin);
       return;
     }
   }
