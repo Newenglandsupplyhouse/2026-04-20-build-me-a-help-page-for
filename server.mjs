@@ -1105,6 +1105,17 @@ function isPartCodeTerm(term) {
 }
 const SPEC_WORD = /^(phase|stage|speed|pack|wire|pole|ton|way|inch|volt|watt|amp|frame|piece|port|row|year)s?$/i;
 
+// A part number's trailing letters are usually a revision or replacement marker, and
+// the catalog does not always agree with the customer on them: we list Nordyne's
+// 626602 bare and its 626610R with the R, so "626602R" found nothing and neither
+// would "626610". "626602R" / "626602-R" / "0131M00002PS" -> "626602" / "626602" /
+// "0131M00002"; "" when there is nothing to strip, or what is left is too short to be
+// a part number ("S89E" -> "S89"). Takes a code of letters, digits and hyphens only.
+function stripCodeSuffix(code) {
+  const base = String(code || "").replace(/(\d)-?[A-Za-z]{1,3}$/, "$1");
+  return base !== code && base.replace(/-/g, "").length >= 4 ? base : "";
+}
+
 // Packaging suffixes. Resideo / Honeywell Home catalog numbers end in "/U" (other makers
 // use a letter or two the same way): the box and Resideo's site say Q3400A1024/U, the
 // supplier feed and our listing say Q3400A1024. Shopify never matches one to the other, so
@@ -1209,8 +1220,9 @@ function buildShopifySearchQuery(userText) {
 // So when a search comes back empty we retry progressively narrower, dropping the
 // least-identifying words first and always keeping part numbers.
 const SHOPIFY_SEARCH_ATTEMPTS = 5;
-// Plus up to this many single-part-number searches once the ladder runs out.
-const SHOPIFY_CODE_ATTEMPTS = 2;
+// Plus up to this many single-part-number searches once the ladder runs out: each
+// number as typed, then each as a prefix with its trailing letters dropped.
+const SHOPIFY_CODE_ATTEMPTS = 4;
 
 // Narrowing one word at a time never reaches the useful end of a long question: a
 // six-term query would stop at three terms and still find nothing. Step down fast
@@ -1308,6 +1320,19 @@ function buildShopifySearchCandidates(userText) {
   for (const term of codes) {
     if (!candidates.includes(term)) candidates.push(term);
   }
+  // Then each part number as a prefix with its trailing letters dropped: "626602r" ->
+  // "626602*". Shopify matches whole words, so a revision letter the customer typed and
+  // the title lacks - or the reverse - is a miss; the prefix finds the bare number, the
+  // "R" and the "RS" listing alike. Verified 2026-10-27 against the Storefront API:
+  // "626602r" returned nothing, "626602*" the Nordyne 626602 limit switch. Built from
+  // the number with any packaging suffix already off, and search syntax stays out of
+  // the term (a leading "-" would mean NOT).
+  for (const term of codes) {
+    const clean = withoutPackagingSuffix(term).replace(/[^A-Za-z0-9-]/g, "").replace(/^-+|-+$/g, "");
+    if (!clean) continue;
+    const prefix = `${stripCodeSuffix(clean) || clean}*`;
+    if (!candidates.includes(prefix)) candidates.push(prefix);
+  }
   const capped = candidates.slice(0, SHOPIFY_SEARCH_ATTEMPTS + SHOPIFY_CODE_ATTEMPTS);
 
   // Each rung that carries a packaging suffix ("Q3400A1024/U") or a catalog maker code
@@ -1379,6 +1404,13 @@ function productQueryTokens(userText) {
   // "udx-200" / "udx 200" split into two tokens above; keep the joined form too.
   for (const match of text.matchAll(/[a-z]{2,}[-\s]?\d{2,}[a-z0-9]*/g)) {
     codes.add(match[0].replace(/[-\s]+/g, ""));
+  }
+  // The suffix-less form too, so a title that lacks the customer's trailing letters
+  // ("626602r" typed, "Nordyne 626602" listed) still scores as naming the part and
+  // passes the site-search gate. containsCode already accepts the reverse.
+  for (const code of [...codes]) {
+    const base = stripCodeSuffix(code);
+    if (base) codes.add(base);
   }
   return {
     numbers: words.filter((w) => /^\d+$/.test(w)),
