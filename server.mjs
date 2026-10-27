@@ -2204,6 +2204,10 @@ const server = createServer(async (request, response) => {
   const finderRoute = requestUrl.pathname.match(/^\/(finder|lamp-finder)\/?$/);
   if (request.method === "GET" && finderRoute) {
     const tool = finderRoute[1] === "lamp-finder" ? "lamp" : "hvac";
+    // 2026-10-27: this shell only ever renders inside the storefront iframe. Keep Google on
+    // the storefront pages (/pages/parts-finder, /pages/projector-lamp-finder), which carry
+    // the real copy, canonical and internal links — never on this bare onrender.com copy.
+    response.setHeader("X-Robots-Tag", "noindex");
     try {
       const template = await readFile(path.join(__dirname, "finder.html"), "utf8");
       sendHtml(response, 200, renderFinderPage(template, loadConfig(tool), tool), origin);
