@@ -62,8 +62,9 @@ lamp finder:
 
 The projector lamp collection description read "Fast shipping from our
 Massachusetts warehouse minimizes projector downtime". That points at the Foxboro
-HVAC pickup location instead of where lamps actually ship from. Corrected
-sentence:
+HVAC pickup location instead of where lamps actually ship from. Corrected in Shopify
+on 2026-10-29 (collection `replacement-front-projection-lamps`; all 217 collections
+rechecked, no other lamp page says it):
 
 > Fast shipping from our centrally located Missouri warehouse minimizes projector
 > downtime.
