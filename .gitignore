@@ -3,3 +3,5 @@ server.out.log
 server.err.log
 finder-config.json
 lamp-finder-config.json
+config-history/
+__pycache__/

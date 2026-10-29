@@ -2,7 +2,14 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig, saveConfig, checkLimits, overDailyCap, resolveTool, isTool, TOOLS } from "./finder-config.mjs";
+import { createPublicKey, verify as verifySignature } from "node:crypto";
+import {
+  loadConfig, saveConfig, checkLimits, overDailyCap, resolveTool, isTool, TOOLS,
+  CONFIG_FIELDS, configVersion, listHistory, getHistory, restoreVersion, ensureBaseline
+} from "./finder-config.mjs";
+import {
+  isStockAsk, STOCK_BUTTON_NOTE, stockCheckOffer, stockCheckRejection, runStockCheck, stockCheckSummary
+} from "./stock-check.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1077,24 +1084,133 @@ const SEARCH_STOPWORDS = new Set([
   "wondering", "if", "know", "tell", "about", "just", "also", "still", "think",
 ]);
 
+// Shopify search syntax a person might type on purpose ("tag:HK42FZ004", "sku:308660").
+// Only a field name glued to its value passes through untouched. Any other colon is
+// ordinary punctuation: customers copy labels ("Model: GMH80803BNBB", "Part #: 0130F00506",
+// "Projector: Runco Reflection VX-1000Ci"). Every message with a colon used to go to
+// Shopify verbatim as one query, which matched nothing, and the finder told a customer we
+// don't carry a Runco lamp that was in stock at $235 (2026-09-11).
+const SHOPIFY_FIELD_QUERY = /(?:^|\s)-?(?:title|tag|tag_not|sku|vendor|product_type|handle|variants\.sku):\S/i;
+
+// A part or model number: letters and digits together ("VX-1000Ci", "0130F00506"), or a
+// long number ("151-1026-00"). Shorter bare numbers ("2", "8124", a ZIP code) stay
+// ordinary terms.
+function isPartCodeTerm(term) {
+  const raw = String(term || "");
+  const t = raw.replace(/[^A-Za-z0-9]/g, "");
+  // Spec wording, not a part: "3-Phase", "2-stage", or a capitalised word glued to a
+  // number by a paste that lost its spaces ("460VAmperage").
+  if (raw.split("-").some((seg) => SPEC_WORD.test(seg)) || /[A-Z][a-z]{3,}/.test(raw)) return false;
+  return (/\d/.test(t) && /[A-Za-z]/.test(t) && t.length >= 4) || /^\d{6,}$/.test(t);
+}
+const SPEC_WORD = /^(phase|stage|speed|pack|wire|pole|ton|way|inch|volt|watt|amp|frame|piece|port|row|year)s?$/i;
+
+// A part number's trailing letters are usually a revision or replacement marker, and
+// the catalog does not always agree with the customer on them: we list Nordyne's
+// 626602 bare and its 626610R with the R, so "626602R" found nothing and neither
+// would "626610". "626602R" / "626602-R" / "0131M00002PS" -> "626602" / "626602" /
+// "0131M00002"; "" when there is nothing to strip, or what is left is too short to be
+// a part number ("S89E" -> "S89"). Takes a code of letters, digits and hyphens only.
+function stripCodeSuffix(code) {
+  const base = String(code || "").replace(/(\d)-?[A-Za-z]{1,3}$/, "$1");
+  return base !== code && base.replace(/-/g, "").length >= 4 ? base : "";
+}
+
+// Packaging suffixes. Resideo / Honeywell Home catalog numbers end in "/U" (other makers
+// use a letter or two the same way): the box and Resideo's site say Q3400A1024/U, the
+// supplier feed and our listing say Q3400A1024. Shopify never matches one to the other, so
+// the finder and the site search told a customer we didn't carry a part with 69 in stock
+// (SKU 2405, 2026-10-08). Fractions ("3/4", "UPS50-40/4") end in a digit and never match.
+const PACKAGING_SUFFIX = /^(.*\d.*)\/([A-Za-z]{1,2})$/;
+function withoutPackagingSuffix(term) {
+  const match = PACKAGING_SUFFIX.exec(String(term || ""));
+  return match && isPartCodeTerm(term) && isPartCodeTerm(match[1]) ? match[1] : term;
+}
+
+// Distributor catalog numbers. The supplier's catalog writes a 3-character maker code in front
+// of the maker's part number - HONQ3400A1024 is HON + Q3400A1024, B&GNRF-22 is B&G + NRF-22
+// (981 of the first 1,100 catalog numbers read on 2026-10-08 are exactly that). Customers copy
+// them off a quote or an invoice, our listings never carry them, and the finder answered "I
+// couldn't find HONQ3400A1024" for an in-stock part. The bare number is only tried after the
+// number as typed found nothing, and a hit only counts when the listing names the bare number
+// (see namesCode), so a wrong strip cannot put an unrelated product in front of the model.
+const MAKER_PREFIX = /^([A-Za-z&-]{3})([A-Za-z0-9].*)$/;
+// Every maker code the supplier's catalog uses (all 9,349 of its pages read 2026-10-08: 8,803
+// catalog numbers are exactly code + part number, 84 codes). An all-digit remainder
+// ("AMT700-30" -> "700-30", "B&G103251" -> "103251"), or a code with a hyphen ("W-R" =
+// White-Rodgers), is only trusted behind one of these, so "XYZ1234" is never read as part
+// "1234". Letters-and-digits remainders behind three plain letters need no list.
+const KNOWN_MAKER_CODES = new Set(["ALN", "AMT", "ANT", "AOS", "ARG", "ASC", "AST", "B&G", "B&J", "BAC", "BAR", "BAS", "BDW", "BEC", "BEL", "BRA", "BUR", "CAL", "CAR", "CLE", "CON", "CRR", "DAN", "DUN", "EFC", "ERI", "FEN", "FEY", "FIE", "FIO", "FIR", "FSC", "GAR", "GCV", "GDM", "GEN", "GRU", "HAG", "HOF", "HON", "HSI", "ICM", "ICP", "JOH", "KMC", "LAN", "LEN", "LOC", "LUX", "MAX", "MCM", "MOD", "NEC", "NOR", "OEM", "PAR", "PKR", "QUI", "RAN", "RAY", "RBS", "REZ", "RHE", "RHW", "RIB", "SAF", "SCU", "SKU", "SPI", "SUN", "TAC", "TEK", "TEL", "TJE", "TRA", "TRI", "USM", "W-R", "WAT", "WEB", "WEI", "WES", "YOR", "ZON"]);
+function withoutMakerPrefix(term) {
+  const match = MAKER_PREFIX.exec(String(term || ""));
+  if (!match || !isPartCodeTerm(term)) return term;
+  const code = match[1].toUpperCase();
+  const known = KNOWN_MAKER_CODES.has(code);
+  if (code.includes("-") && !known) return term;
+  const rest = match[2];
+  const alnum = rest.replace(/[^A-Za-z0-9]/g, "");
+  if (alnum.length < 4 || !/\d/.test(alnum)) return term;
+  if (/[A-Za-z]/.test(alnum)) return isPartCodeTerm(rest) ? rest : term;
+  return known ? rest : term;
+}
+// Part numbers in the message that only make sense with the maker code (and any packaging
+// suffix) taken off: [{ asked: "HONQ3400A1024", bare: "Q3400A1024" }].
+function makerPrefixCodes(userText) {
+  const out = [];
+  for (const word of String(userText || "").split(/\s+/)) {
+    const asked = word.replace(/[?!.,;:]+$/, "");
+    const unprefixed = withoutMakerPrefix(asked);
+    if (unprefixed === asked) continue;
+    const bare = withoutPackagingSuffix(unprefixed);
+    if (!out.some((d) => d.bare === bare)) out.push({ asked, bare });
+  }
+  return out;
+}
+// Does this listing name the part number (title, tags or SKU), punctuation ignored?
+function namesCode(product, code) {
+  const squished = String(code || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const fields = [product.title, ...(product.tags || []), ...(product.variants?.nodes || []).map((v) => v.sku)]
+    .map((s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, ""));
+  return fields.some((field) => containsCode(field, squished));
+}
+
+const SEARCH_MAX_TERMS = 8;
+
 function buildShopifySearchQuery(userText) {
   const compact = userText.trim().replace(/\s+/g, " ");
   if (!compact) {
     return "";
   }
 
-  if (compact.includes(":")) {
+  if (SHOPIFY_FIELD_QUERY.test(compact)) {
     return compact;
   }
 
+  const seen = new Set();
   const words = compact
+    .replace(/:/g, " ")
     .split(" ")
     .map((w) => w.replace(/[?!.,;:]+$/, ""))
-    .filter(Boolean);
+    // Bare punctuation ("#", "—") and prices ("$235") are never in a product title.
+    .filter((w) => /[a-z0-9]/i.test(w) && !/^\$\d/.test(w))
+    // Each word once: a pasted label repeats the brand ("Runco ... Runco ... Runco").
+    .filter((w) => {
+      const key = w.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   const meaningful = words.filter(
     (w) => /\d/.test(w) || !SEARCH_STOPWORDS.has(w.toLowerCase().replace(/[^a-z']/g, ""))
   );
-  return (meaningful.length ? meaningful : words).slice(0, 8).join(" ");
+  const pool = meaningful.length ? meaningful : words;
+  if (pool.length <= SEARCH_MAX_TERMS) return pool.join(" ");
+  // Too many words: keep every part number, fill the rest in the order typed. Cutting at
+  // the first eight words dropped the number from "my furnace stopped working last night
+  // and the tech said I need 0130F00506", which is the one word that names the part.
+  const codes = new Set(pool.filter(isPartCodeTerm).slice(0, SEARCH_MAX_TERMS));
+  const others = new Set(pool.filter((w) => !codes.has(w)).slice(0, SEARCH_MAX_TERMS - codes.size));
+  return pool.filter((w) => codes.has(w) || others.has(w)).join(" ");
 }
 
 // Shopify's Storefront products(query:) ANDs every term and does not reliably stem,
@@ -1104,6 +1220,9 @@ function buildShopifySearchQuery(userText) {
 // So when a search comes back empty we retry progressively narrower, dropping the
 // least-identifying words first and always keeping part numbers.
 const SHOPIFY_SEARCH_ATTEMPTS = 5;
+// Plus up to this many single-part-number searches once the ladder runs out: each
+// number as typed, then each as a prefix with its trailing letters dropped.
+const SHOPIFY_CODE_ATTEMPTS = 4;
 
 // Narrowing one word at a time never reaches the useful end of a long question: a
 // six-term query would stop at three terms and still find nothing. Step down fast
@@ -1193,7 +1312,59 @@ function buildShopifySearchCandidates(userText) {
     if (narrowed && !candidates.includes(narrowed)) candidates.push(narrowed);
   }
 
-  return candidates.slice(0, SHOPIFY_SEARCH_ATTEMPTS);
+  // Then each part number on its own. The ladder narrows to the single best-weighted
+  // term, so a customer who gives two or three numbers ("VX-1000Ci, 151-1026-00,
+  // RUPA-004910") was only matched if that one was in the catalog. These run only when
+  // every search above came back empty.
+  const codes = terms.filter(isPartCodeTerm);
+  for (const term of codes) {
+    if (!candidates.includes(term)) candidates.push(term);
+  }
+  // Then each part number as a prefix with its trailing letters dropped: "626602r" ->
+  // "626602*". Shopify matches whole words, so a revision letter the customer typed and
+  // the title lacks - or the reverse - is a miss; the prefix finds the bare number, the
+  // "R" and the "RS" listing alike. Verified 2026-10-27 against the Storefront API:
+  // "626602r" returned nothing, "626602*" the Nordyne 626602 limit switch. Built from
+  // the number with any packaging suffix already off, and search syntax stays out of
+  // the term (a leading "-" would mean NOT).
+  for (const term of codes) {
+    const clean = withoutPackagingSuffix(term).replace(/[^A-Za-z0-9-]/g, "").replace(/^-+|-+$/g, "");
+    if (!clean) continue;
+    const prefix = `${stripCodeSuffix(clean) || clean}*`;
+    if (!candidates.includes(prefix)) candidates.push(prefix);
+  }
+  const capped = candidates.slice(0, SHOPIFY_SEARCH_ATTEMPTS + SHOPIFY_CODE_ATTEMPTS);
+
+  // Each rung that carries a packaging suffix ("Q3400A1024/U") or a catalog maker code
+  // ("HONQ3400A1024") is retried without it right after, before any narrower rung: the
+  // customer's own wording still goes first, so a listing that names the number as typed
+  // keeps matching it.
+  const out = [];
+  for (const candidate of capped) {
+    out.push(candidate);
+    const words = candidate.split(" ");
+    const bare = words.map(withoutPackagingSuffix).join(" ");
+    // Maker codes come off only on a part-number-only rung (the ladder always reaches one), so a
+    // long message is not searched twice over.
+    const unprefixed = words.length === 1 ? withoutPackagingSuffix(withoutMakerPrefix(words[0])) : candidate;
+    for (const variant of [bare, unprefixed]) {
+      if (variant !== candidate && !capped.includes(variant) && !out.includes(variant)) out.push(variant);
+    }
+  }
+
+  // Last, the words without the numbers. A number we don't list - very often the
+  // customer's UNIT model, which no part names - rides along on every rung above, so
+  // "replacement fan motor for Goodman outdoor ac unit VSX130361EH" found nothing at all,
+  // when the words alone find the Goodman outdoor fan motors we do sell. Only when the
+  // words still name a kind of part plus something else: a brand alone ("honeywell") or
+  // filler ("serial", "cross reference") would hand the model a list of unrelated products.
+  if (codes.length) {
+    const words = terms.filter((term) => !isPartCodeTerm(term) && searchTermWeight(term) > 0);
+    const namesAPart = words.some((term) => searchTermWeight(term) === 1);
+    const query = words.join(" ");
+    if (words.length >= 2 && namesAPart && !out.includes(query)) out.push(query);
+  }
+  return out;
 }
 
 // How many catalog candidates to ASK Shopify for, and how many to actually put in
@@ -1203,6 +1374,25 @@ function buildShopifySearchCandidates(userText) {
 // the finder told them we might not carry it. Fetch wide, then re-rank in code.
 const SHOPIFY_SEARCH_CANDIDATES = 20;
 const SHOPIFY_CONTEXT_PRODUCTS = 8;
+// How many of the site search's top results join the candidate pool (see siteSearch).
+const SITE_SEARCH_RESULTS = 10;
+
+// Which site-search results a finder may use. Each finder only gets its own kind of
+// listing: "replacement board" handed the HVAC finder Smart Board projector lamps. Every
+// projector listing says so in its title ("Replacement Projector Lamp", "Projector Air
+// Filter", "Projector Bulb", "TV Lamp"); HVAC titles never do, and words like "lamp" or
+// "bulb" can't decide it ("Air Purifier UV Lamp" and "Bulb Well" are HVAC parts). And when
+// the customer typed a part number, only listings that name it: "PowerLite 1980WU" brought
+// in the 1985WU filter, a neighbouring model.
+const PROJECTOR_LISTING = /\bprojector\b|\btv lamp\b/i;
+function siteResultFits(product, tool, codes) {
+  const projector = PROJECTOR_LISTING.test(String(product.title || ""));
+  if ((tool === "lamp") !== projector) return false;
+  if (!codes.length) return true;
+  const fields = [product.title, ...(product.tags || []), ...(product.variants?.nodes || []).map((v) => v.sku)]
+    .map((s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, ""));
+  return codes.some((code) => fields.some((field) => containsCode(field, code)));
+}
 
 // The parts of a customer's message that identify WHICH product: bare model numbers
 // ("vent rite 1" -> "1"), alphanumeric part codes ("B1370F", "UDX-200" -> "udx200"),
@@ -1214,6 +1404,13 @@ function productQueryTokens(userText) {
   // "udx-200" / "udx 200" split into two tokens above; keep the joined form too.
   for (const match of text.matchAll(/[a-z]{2,}[-\s]?\d{2,}[a-z0-9]*/g)) {
     codes.add(match[0].replace(/[-\s]+/g, ""));
+  }
+  // The suffix-less form too, so a title that lacks the customer's trailing letters
+  // ("626602r" typed, "Nordyne 626602" listed) still scores as naming the part and
+  // passes the site-search gate. containsCode already accepts the reverse.
+  for (const code of [...codes]) {
+    const base = stripCodeSuffix(code);
+    if (base) codes.add(base);
   }
   return {
     numbers: words.filter((w) => /^\d+$/.test(w)),
@@ -1252,6 +1449,70 @@ function crossReferenceTags(product) {
 // product listed as its replacement.
 const CROSS_REFERENCE_CODE_SCORE = 80;
 
+// Who actually made a projector lamp. The ET-LAD510F was presented as a "Panasonic Brand
+// Original" lamp. It is not one: our ET-LAD510F listing ships the supplier's et-lad510f, an
+// original (Matsushita) bulb in a replacement housing. The Panasonic-branded quad pack is
+// the supplier's separate et-lad510f-om, which we list per projector (pt-dw17k-lamp-om).
+// The line the model reads never said which kind it was looking at, and listing words -
+// "Original Bulb", "genuine OEM bulb", "Osram OEM" - describe the BULB's maker, so with
+// the projector brand at the front of every title the model read them as the brand's own
+// lamp. The kind is not a matter of wording. Every vendor:JTX listing reuses the supplier's
+// handle verbatim (all 23,521 lamps checked), and the supplier puts the tier in the handle:
+// "-om" (or "-om-lamp") is the projector maker's own lamp, "-a" is a compatible one,
+// "-bulb" is a bare bulb, and anything else is an original bulb in a replacement housing
+// (elplp61-om / elplp61 / elplp61-a, $149.99 / $89.99 / $36.99 on the supplier's feed). The
+// PLI listings say it in the handle ("...-with-original-ushio-bulb-and-housing"). Only a
+// handle marks a lamp as the brand's own. The word "OEM" in a title never does: an SEO
+// title like "Projector Lamp | 380W Osram OEM" is about the bulb, and the supplier's own
+// titles call its replacement housings "OEM ... with Philips bulb inside". Unknown means
+// no type rather than a guess, and only projector lamps are typed: HVAC listings and lamp
+// filters never get one. The vendor is read here and never shown to the model.
+const LAMP_TYPE_OEM = "OEM - the projector maker's own brand-name lamp and housing";
+const LAMP_TYPE_ORIGINAL_BULB = "original bulb in a replacement housing - NOT the projector maker's own brand-name lamp";
+const LAMP_TYPE_COMPATIBLE = "compatible bulb in a replacement housing - NOT the projector maker's own brand-name lamp";
+const LAMP_TYPE_BARE_BULB = "bare bulb only, no housing - NOT the projector maker's own brand-name lamp";
+
+// The rule travels with the data rather than living only in the prompt. The live lamp
+// prompt is the saved /admin config, which shadows the seed in finder-config.mjs, so a
+// prompt edit alone does not reach customers until someone pushes it there; this line
+// does on the next deploy. Added only when a lamp on the page is typed.
+const LAMP_TYPE_NOTE = `"lamp type" says who made each lamp, from our own catalog data, and it overrides the title and description. Only the OEM type is the projector maker's own brand-name lamp: never call any other lamp genuine, OEM, brand original or "[brand] brand". On those lamps "Original", "genuine" and "OEM" describe the bulb inside, and the brand in the title is the projector the lamp fits.`;
+
+function lampType(product) {
+  const title = String(product.title || "");
+  const handle = String(product.handle || "").toLowerCase();
+  const isProjectorLamp = /projector/i.test(`${title} ${product.productType || ""}`)
+    && /\b(lamps?|bulbs?)\b/i.test(title) && !/\bfilters?\b/i.test(title);
+  if (!isProjectorLamp) return "";
+  // The supplier de-duplicates a few handles with a trailing number (powerlite-x21-lamp-om-1,
+  // tlplw11-a-1), so the tier suffix may carry one.
+  if (/(^|-)om(-lamp)?(-\d+)?$|-oem(-\d+)?$/.test(handle)) return LAMP_TYPE_OEM;
+  if (/-bulb(-only)?(-a)?(-\d+)?$/.test(handle) || /\b(bulb only|bare bulb)\b/i.test(title)) return LAMP_TYPE_BARE_BULB;
+  if (/-a(-\d+)?$/.test(handle) || /\bcompatible\b/i.test(title)) return LAMP_TYPE_COMPATIBLE;
+  if (/-with-original(-[a-z]+)?-bulb-and-housing$/.test(handle) || /\boriginal\b.*\bbulb\b/i.test(title)
+    || String(product.vendor || "").trim().toUpperCase() === "JTX") {
+    return LAMP_TYPE_ORIGINAL_BULB;
+  }
+  return "";
+}
+
+// Does `code` appear in `squished` (lower-case, punctuation removed) as itself, not as the
+// front of a longer number? "tw10" is in "emptw100" - a different projector - and scored
+// the EMP-TW100 filter as if it were the EMP-TW10 lamp. A trailing letter is still a
+// match ("ms524" in "ms524a" is the variant's own neighbour, settled by the exact-token
+// bonus); a trailing digit, or a leading one before a numeric code, never is.
+function containsCode(squished, code) {
+  if (!code) return false;
+  for (let at = squished.indexOf(code); at >= 0; at = squished.indexOf(code, at + 1)) {
+    const after = squished[at + code.length] || "";
+    const before = squished[at - 1] || "";
+    if (/\d/.test(after)) continue;
+    if (/^\d/.test(code) && /\d/.test(before)) continue;
+    return true;
+  }
+  return false;
+}
+
 function scoreProductForQuery(product, tokens) {
   const title = String(product.title || "").toLowerCase();
   const titleTokens = new Set(title.split(/[^a-z0-9]+/).filter(Boolean));
@@ -1270,12 +1531,12 @@ function scoreProductForQuery(product, tokens) {
   // scores high because it is what catches "udx-200" in a "UDX200" title.
   for (const code of tokens.codes) {
     if (titleTokens.has(code)) score += 120;
-    else if (squishedTitle.includes(code)) score += 100;
+    else if (containsCode(squishedTitle, code)) score += 100;
   }
   if (tokens.codes.length) {
     const refs = crossReferenceTags(product).map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, ""));
     for (const code of tokens.codes) {
-      if (refs.some((r) => r === code || r.includes(code))) { score += CROSS_REFERENCE_CODE_SCORE; break; }
+      if (refs.some((r) => containsCode(r, code))) { score += CROSS_REFERENCE_CODE_SCORE; break; }
     }
   }
 
@@ -1305,7 +1566,85 @@ function rankProductsForQuery(products, userText, limit) {
     .map((entry) => entry.product);
 }
 
-async function getShopifyProductContext(conversation) {
+// Lamp finder, overheating: a projector that runs hot or shuts itself off most often
+// needs its air filter cleaned or replaced, and the filter costs a fraction of the lamp.
+// The customer names the PROJECTOR, and a filter's title rarely does ("Epson V13H134A41
+// Replacement Projector Air Filter"), so the ordinary search for "epson powerlite 1980wu"
+// returns only the lamp and the finder could name the filter's part number but never
+// show its price or link. When a lamp-finder message describes heat or asks about a
+// filter, search "<model code> filter" as well, keep only air filters whose listing
+// names that code, and quote the listing text that names it - the fitment line sits
+// ~1,250 characters into the description, far past the 220 the main block shows.
+const LAMP_HEAT_SYMPTOM = /\b(?:over-?heat\w*|too hot|runs? hot|running hot|gets? hot|getting hot|heat(?:ing)? up|temp(?:erature)?s?\b|thermal|shut(?:s|ting)?\s*(?:it\s*self\s*)?(?:off|down)|turn(?:s|ing)?\s+(?:it\s*self\s+)?off|power(?:s|ing)?\s+(?:it\s*self\s+)?(?:off|down)|keeps?\s+(?:shutting|turning|powering)|fans?\s+(?:is\s+|are\s+)?(?:loud|noisy|roaring)|(?:loud|noisy)\s+fans?)/i;
+const LAMP_FILTER_WORD = /\bfilters?\b/i;
+const FILTER_SEARCH_MAX_TERMS = 3;
+const FILTER_CONTEXT_MAX = 3;
+
+function wantsLampFilterSearch(conversation) {
+  const text = getLatestUserMessage(conversation);
+  return LAMP_HEAT_SYMPTOM.test(text) || LAMP_FILTER_WORD.test(text);
+}
+
+// Model codes the customer has given anywhere in the conversation, newest first:
+// "1980WU" and "8350" count, "20 minutes" and "3rd floor" do not.
+function lampModelTerms(conversation) {
+  const terms = [];
+  for (let index = conversation.length - 1; index >= 0; index -= 1) {
+    const message = conversation[index];
+    if (message?.role !== "user" || !message.content) continue;
+    const { codes, numbers } = productQueryTokens(message.content);
+    for (const term of [...codes, ...numbers.filter((n) => n.length >= 3)]) {
+      if (/^\d+(?:st|nd|rd|th|am|pm|min|mins|hr|hrs|k|p|hz|w|v)$/.test(term)) continue;
+      if (!terms.includes(term)) terms.push(term);
+    }
+  }
+  return terms.slice(0, FILTER_SEARCH_MAX_TERMS);
+}
+
+function listingExcerpt(text, term) {
+  const flat = String(text || "").replace(/\s+/g, " ");
+  const at = flat.toLowerCase().indexOf(term);
+  if (at < 0) return "";
+  return flat.slice(Math.max(0, at - 140), at + term.length + 120).trim();
+}
+
+async function lampFilterContext(conversation, runSearch) {
+  const terms = lampModelTerms(conversation);
+  if (!terms.length) return "";
+  const found = new Map();
+  for (const term of terms) {
+    let results = [];
+    try { results = await runSearch(`${term} filter`); } catch { results = []; }
+    for (const product of results) {
+      if (!/filter/i.test(product.productType || "")) continue;
+      const titleHas = String(product.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "").includes(term);
+      const excerpt = listingExcerpt(product.description, term);
+      if (!titleHas && !excerpt) continue;
+      const key = product.handle || product.id;
+      if (!found.has(key)) found.set(key, { product, excerpt });
+    }
+    if (found.size) break;
+  }
+  if (!found.size) {
+    return `AIR FILTER SEARCH for "${terms.join(", ")}": no air filter in our catalog names this projector.`;
+  }
+  const lines = [`AIR FILTER SEARCH for "${terms.join(", ")}" - air filters in our catalog whose listing names this projector:`];
+  for (const { product, excerpt } of [...found.values()].slice(0, FILTER_CONTEXT_MAX)) {
+    const price = product.priceRange?.minVariantPrice;
+    lines.push([
+      `- ${product.title}`,
+      product.productType ? `type: ${product.productType}` : "",
+      `availability: ${product.availableForSale ? "available" : "unavailable"}`,
+      price ? `price: ${price.amount} ${price.currencyCode}` : "price unavailable",
+      product.onlineStoreUrl ? `url: ${product.onlineStoreUrl}` : "",
+      excerpt ? `listing says: "...${excerpt}..."` : ""
+    ].filter(Boolean).join(" | "));
+  }
+  return lines.join("\n");
+}
+
+async function getShopifyProductContext(conversation, options = {}) {
+  const tool = options.tool || "hvac";
   const storeDomain = process.env.SHOPIFY_STORE_DOMAIN;
   const storefrontToken = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN;
   const apiVersion = process.env.SHOPIFY_API_VERSION || "2026-01";
@@ -1322,14 +1661,12 @@ async function getShopifyProductContext(conversation) {
   }
 
   const endpoint = `https://${storeDomain}/api/${apiVersion}/graphql.json`;
-  const graphQLQuery = `
-    query HelpPageProducts($query: String!) {
-      products(first: ${SHOPIFY_SEARCH_CANDIDATES}, query: $query, sortKey: RELEVANCE) {
-        nodes {
+  const productFields = `
           id
           title
           handle
           productType
+          vendor
           tags
           availableForSale
           description
@@ -1354,13 +1691,27 @@ async function getShopifyProductContext(conversation) {
                 currencyCode
               }
             }
+          }`;
+  const graphQLQuery = `
+    query HelpPageProducts($query: String!) {
+      products(first: ${SHOPIFY_SEARCH_CANDIDATES}, query: $query, sortKey: RELEVANCE) {
+        nodes {${productFields}
+        }
+      }
+    }
+  `;
+  const siteSearchQuery = `
+    query HelpPageSiteSearch($query: String!) {
+      search(query: $query, first: ${SITE_SEARCH_RESULTS}, types: [PRODUCT], unavailableProducts: LAST) {
+        nodes {
+          ... on Product {${productFields}
           }
         }
       }
     }
   `;
 
-  const runSearch = async (term) => {
+  const storefront = async (query, term) => {
     const shopifyResponse = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -1368,7 +1719,7 @@ async function getShopifyProductContext(conversation) {
         "X-Shopify-Storefront-Access-Token": storefrontToken
       },
       body: JSON.stringify({
-        query: graphQLQuery,
+        query,
         variables: {
           query: term
         }
@@ -1385,8 +1736,20 @@ async function getShopifyProductContext(conversation) {
       throw new Error(payload.errors[0].message || "Shopify Storefront API returned an error.");
     }
 
-    return payload?.data?.products?.nodes || [];
+    return payload?.data || {};
   };
+  const runSearch = async (term) => (await storefront(graphQLQuery, term))?.products?.nodes || [];
+
+  // The site's own search (the engine behind the storefront search box) ranks an exact
+  // model match first; products(query:) does not. "EW300N" matches 117 Hitachi listings,
+  // and products(query:) put ten other models ahead of the three EW300N lamps, so the
+  // first page came back full, the search stopped, and the finder told the customer we
+  // had no lamp for it (2026-09-09; EH-TW7400 the same). Its top results join the pool for
+  // the re-ranker, which only lets them win on a better title match. Started now, so it
+  // runs alongside the first search instead of adding a wait; a failure costs nothing.
+  const siteSearch = storefront(siteSearchQuery, searchCandidates[0])
+    .then((data) => (data?.search?.nodes || []).filter((node) => node && node.handle))
+    .catch(() => []);
 
   // A rung that came back non-empty used to end the search - wrong when it is non-empty
   // with the WRONG products. "thermocouple for my honeywell gas valve" matched four gas
@@ -1400,8 +1763,13 @@ async function getShopifyProductContext(conversation) {
   const pool = new Map();
   const usedQueries = [];
   let namedTheProduct = false;
+  const prefixed = makerPrefixCodes(latestUserMessage);
   for (const candidate of searchCandidates) {
-    const results = await runSearch(candidate);
+    let results = await runSearch(candidate);
+    // A rung searched on a number with its maker code taken off only keeps listings that name
+    // that number - "VSX130361EH" -> "130361EH" must not pull in whatever else matches.
+    const required = prefixed.filter((d) => candidate.split(" ").includes(d.bare));
+    if (required.length) results = results.filter((product) => required.every((d) => namesCode(product, d.bare)));
     usedQueries.push(candidate);
     for (const product of results) {
       const key = product.handle || product.id;
@@ -1410,24 +1778,52 @@ async function getShopifyProductContext(conversation) {
     }
     if (pool.size && (!productWords.length || namedTheProduct)) break;
   }
+  // Rank and fit on the bare numbers too: a title says "Q3400A1024", never "HONQ3400A1024".
+  const rankText = [latestUserMessage, ...prefixed.map((d) => d.bare)].join(" ");
+  const askedCodes = productQueryTokens(rankText).codes;
+  for (const product of await siteSearch) {
+    if (!pool.has(product.handle) && siteResultFits(product, tool, askedCodes)) pool.set(product.handle, product);
+  }
   const matched = [...pool.values()];
   const usedQuery = usedQueries.join(" / ");
 
-  const products = rankProductsForQuery(matched, latestUserMessage, SHOPIFY_CONTEXT_PRODUCTS);
+  const products = rankProductsForQuery(matched, rankText, SHOPIFY_CONTEXT_PRODUCTS);
+  // Lamp finder only: the air-filter lookup rides alongside the ordinary results. The HVAC
+  // finder never reaches this, so its context is byte-for-byte what it was.
+  const filterBlock = tool === "lamp" && wantsLampFilterSearch(conversation)
+    ? await lampFilterContext(conversation, runSearch)
+    : "";
   if (!products.length) {
     return {
       source: "shopify",
       searchQuery,
-      text: `Live Shopify product search for "${latestUserMessage}" returned no matches.`
+      handles: [],
+      text: [`Live Shopify product search for "${latestUserMessage}" returned no matches.`, filterBlock].filter(Boolean).join("\n\n")
     };
   }
 
   const lines = [
     `Live Shopify product search results for "${latestUserMessage}" using query "${usedQuery}":`
   ];
+  if (products.some((product) => lampType(product))) lines.push(LAMP_TYPE_NOTE);
+  // Say so when a match came from dropping a packaging suffix, or the model hedges the
+  // exact part into a "closest match" because the title lacks the "/U".
+  for (const { asked, bare } of prefixed) {
+    if (!usedQueries.some((q) => q.split(" ").includes(bare)) || !products.some((p) => namesCode(p, bare))) continue;
+    // Never name the supplier: "a distributor catalog number" is all the customer needs to hear.
+    lines.push(`Note: "${asked}" is a distributor catalog number - the maker code "${asked.slice(0, 3)}" in front of the part number "${bare}". A listing that names ${bare} IS the part the customer asked for. Call it by the listing's own number (${bare}); do not say it is listed as "${asked}".`);
+  }
+  for (const asked of new Set(latestUserMessage.split(/\s+/).map((w) => w.replace(/[?!.,;:]+$/, "")))) {
+    const bare = withoutPackagingSuffix(asked);
+    if (bare === asked || prefixed.some((d) => d.asked === asked) || !usedQueries.some((q) => q.split(" ").includes(bare))) continue;
+    lines.push(/\/u$/i.test(asked)
+      ? `Note: "${asked}" was searched as "${bare}". "/U" is the manufacturer's packaging code, so a listing for ${bare} IS the part the customer asked for.`
+      : `Note: "${asked}" was searched as "${bare}" (without the "${asked.slice(bare.length)}" ending). Name the exact number the listing shows.`);
+  }
 
   for (const product of products) {
     const crossRefs = crossReferenceTags(product);
+    const lamp = lampType(product);
     const minPrice = product.priceRange?.minVariantPrice;
     const priceText = minPrice
       ? `${minPrice.amount} ${minPrice.currencyCode}`
@@ -1441,6 +1837,7 @@ async function getShopifyProductContext(conversation) {
         `- ${product.title}`,
         // Supplier/vendor is confidential — never expose it to customers (vendor != brand).
         product.productType ? `type: ${product.productType}` : "",
+        lamp ? `lamp type: ${lamp}` : "",
         crossRefs.length ? `cross-reference: ${crossRefs.join(", ")}` : "",
         `availability: ${product.availableForSale ? "available" : "unavailable"}`,
         `price: ${priceText}`,
@@ -1455,7 +1852,10 @@ async function getShopifyProductContext(conversation) {
   return {
     source: "shopify",
     searchQuery: usedQuery,
-    text: lines.join("\n")
+    // What the model was shown, recorded with the chat so a reply that offered nothing
+    // can be told apart: search found nothing, or search found it and the reply didn't use it.
+    handles: products.map((p) => p.handle).filter(Boolean),
+    text: [lines.join("\n"), filterBlock].filter(Boolean).join("\n\n")
   };
 }
 
@@ -1585,7 +1985,12 @@ async function createOpenAIResponse(conversation, cfg = null, options = {}) {
     ]
   }));
 
-  const shopifyContext = await getShopifyProductContext(conversation);
+  const shopifyContext = await getShopifyProductContext(conversation, { tool: options.tool });
+  // A stock question: point the customer at the live-check button instead of letting the
+  // model imply it checked anything. Only on these turns, so every other answer is unchanged.
+  if (isStockAsk(getLatestUserMessage(conversation))) {
+    input.unshift({ role: "system", content: [{ type: "input_text", text: STOCK_BUTTON_NOTE }] });
+  }
   if (shopifyContext?.text) {
     input.unshift({
       role: "system",
@@ -1641,13 +2046,15 @@ async function createOpenAIResponse(conversation, cfg = null, options = {}) {
 
   return {
     payload,
-    usedSources: shopifyContext?.text ? ["shopify"] : []
+    usedSources: shopifyContext?.text ? ["shopify"] : [],
+    // null = the catalog search didn't run (no store credentials, or nothing to search on)
+    catalog: shopifyContext ? { query: shopifyContext.searchQuery || "", handles: shopifyContext.handles || [] } : null
   };
 }
 
 // Fire-and-forget: record a completed Parts Finder Q&A turn in the NESH CRM (chat_logs).
 // Never blocks or affects the customer's reply; silently no-ops if CRM_CHATLOG_SECRET is unset.
-function logChatToCrm(conversation, reply, usedTools, documents, sessionId, tool = "hvac") {
+function logChatToCrm(conversation, reply, usedTools, documents, sessionId, tool = "hvac", catalog = null) {
   const secret = process.env.CRM_CHATLOG_SECRET;
   if (!secret) return;
   const url = process.env.CRM_CHATLOG_URL || "https://nesh-crm.onrender.com/api/hooks/finder-chat";
@@ -1666,6 +2073,9 @@ function logChatToCrm(conversation, reply, usedTools, documents, sessionId, tool
     documents: (Array.isArray(documents) ? documents : [])
       .map((d) => ({ filename: d.filename || d.title || "", url: d.url || d.document_url || d.file_url || "" }))
       .slice(0, 20),
+    // What the store search handed the model this turn (feeds the CRM's weekly gap report).
+    // Left out when the search didn't run, so the CRM can tell "found nothing" from "not recorded".
+    ...(catalog ? { catalog_query: String(catalog.query || "").slice(0, 300), catalog_handles: catalog.handles.slice(0, 20) } : {}),
   };
   fetch(`${url}?secret=${encodeURIComponent(secret)}`, {
     method: "POST",
@@ -1707,6 +2117,58 @@ function adminAuthed(request) {
   if (!h.startsWith("Basic ")) return false;
   const dec = Buffer.from(h.slice(6), "base64").toString();
   return dec.slice(dec.indexOf(":") + 1) === ADMIN_PASSWORD;
+}
+
+// IW Scheduler (Jason's ops app) manages both finders from its Ask tab. It signs each
+// admin request with a P-256 key it generated for itself; only the PUBLIC half lives
+// here, in IWS_PUBLIC_JWK (published at <iws>/api/finder/key). So no password is shared,
+// and a leaked env var can't be used to write anything.
+// Each token is bound to one method + path, lives about a minute, and is accepted once.
+// It reaches the config, version-history, restore and chat-log routes, nothing else —
+// not the knowledge-base uploads or deletes.
+const IWS_ROUTES = /^\/admin\/api\/(config|config\/history|config\/history\/[\w-]+|config\/restore|logs)$/;
+const IWS_CLOCK_SKEW_S = 30;
+let iwsPublicKey = null;
+if (process.env.IWS_PUBLIC_JWK) {
+  try {
+    iwsPublicKey = createPublicKey({ key: JSON.parse(process.env.IWS_PUBLIC_JWK), format: "jwk" });
+  } catch (error) {
+    console.error(`IWS_PUBLIC_JWK is set but unreadable, so IW Scheduler can't reach the admin API: ${error.message}`);
+  }
+}
+const iwsSeenTokens = new Map();   // jti -> exp (seconds); a replayed token is refused
+
+function iwsAuthed(request, requestUrl) {
+  if (!iwsPublicKey) return false;
+  const h = request.headers.authorization || "";
+  if (!h.startsWith("IWS ")) return false;
+  const parts = h.slice(4).trim().split(".");
+  if (parts.length !== 3) return false;
+  let header;
+  let claims;
+  try {
+    header = JSON.parse(Buffer.from(parts[0], "base64url").toString());
+    claims = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+  } catch {
+    return false;
+  }
+  if (header?.alg !== "ES256") return false;
+  const signed = verifySignature(
+    "sha256",
+    Buffer.from(`${parts[0]}.${parts[1]}`),
+    { key: iwsPublicKey, dsaEncoding: "ieee-p1363" },
+    Buffer.from(parts[2], "base64url")
+  );
+  if (!signed) return false;
+  const now = Math.floor(Date.now() / 1000);
+  if (claims.aud !== "finder-admin") return false;
+  if (typeof claims.exp !== "number" || claims.exp + IWS_CLOCK_SKEW_S < now || claims.exp > now + 300) return false;
+  if (claims.m !== request.method || claims.p !== requestUrl.pathname + requestUrl.search) return false;
+  if (!IWS_ROUTES.test(requestUrl.pathname)) return false;
+  if (typeof claims.jti !== "string" || claims.jti.length < 16 || iwsSeenTokens.has(claims.jti)) return false;
+  for (const [jti, exp] of iwsSeenTokens) if (exp + IWS_CLOCK_SKEW_S < now) iwsSeenTokens.delete(jti);
+  iwsSeenTokens.set(claims.jti, claims.exp);
+  return true;
 }
 
 async function openAiAdmin(pathname, options = {}) {
@@ -1825,6 +2287,10 @@ const server = createServer(async (request, response) => {
   const finderRoute = requestUrl.pathname.match(/^\/(finder|lamp-finder)\/?$/);
   if (request.method === "GET" && finderRoute) {
     const tool = finderRoute[1] === "lamp-finder" ? "lamp" : "hvac";
+    // 2026-10-27: this shell only ever renders inside the storefront iframe. Keep Google on
+    // the storefront pages (/pages/parts-finder, /pages/projector-lamp-finder), which carry
+    // the real copy, canonical and internal links — never on this bare onrender.com copy.
+    response.setHeader("X-Robots-Tag", "noindex");
     try {
       const template = await readFile(path.join(__dirname, "finder.html"), "utf8");
       sendHtml(response, 200, renderFinderPage(template, loadConfig(tool), tool), origin);
@@ -1901,7 +2367,7 @@ const server = createServer(async (request, response) => {
     const isToolsGet = request.method === "GET"
       && (requestUrl.pathname === "/admin/tools" || requestUrl.pathname === "/admin/tools/");
     const tokenOk = !!process.env.TOOLS_TOKEN && requestUrl.searchParams.get("k") === process.env.TOOLS_TOKEN;
-    if (!(adminAuthed(request) || (isToolsGet && tokenOk))) {
+    if (!(adminAuthed(request) || iwsAuthed(request, requestUrl) || (isToolsGet && tokenOk))) {
       response.writeHead(401, { "WWW-Authenticate": 'Basic realm="Parts Finder Admin"' });
       response.end("Authentication required");
       return;
@@ -1933,7 +2399,7 @@ const server = createServer(async (request, response) => {
 
     // ?tool=lamp manages the Projector Lamp Finder's config; no query string
     // keeps the existing HVAC behaviour byte-for-byte.
-    if (requestUrl.pathname === "/admin/api/config") {
+    if (requestUrl.pathname === "/admin/api/config" || requestUrl.pathname.startsWith("/admin/api/config/")) {
       const rawTool = requestUrl.searchParams.get("tool");
       // resolveTool fails open to hvac, which is right for /api/chat but wrong here:
       // a typo like ?tool=lamps would silently merge a lamp edit into the live HVAC
@@ -1943,20 +2409,75 @@ const server = createServer(async (request, response) => {
         return;
       }
       const cfgTool = resolveTool(rawTool);
-      // _tool lets the panel assert it read/wrote the profile it meant to. It is not in
-      // the PUT allow-list below, so it can never be persisted into a config file.
-      if (request.method === "GET") {
-        sendJson(response, 200, { ...loadConfig(cfgTool), _tool: cfgTool }, origin);
+      // _tool lets the panel assert it read/wrote the profile it meant to, and _version is
+      // the fingerprint it sends back on save. Neither is in CONFIG_FIELDS, so neither can
+      // ever be persisted into a config file.
+      const stamp = (cfg) => ({ ...cfg, _tool: cfgTool, _version: configVersion(cfgTool) });
+      // A save or restore made on top of a version the sender never saw is refused, so
+      // two editors (the panel and an API call) can't silently undo each other.
+      const staleBase = (body) => body._baseVersion && body._baseVersion !== configVersion(cfgTool);
+      const STALE = "The finder was changed after you loaded it. Reload to see the newer version, then make your change again.";
+      // "admin" only when the panel says so, "iws" only on a request IW Scheduler signed;
+      // every other writer is recorded as the API.
+      const viaIws = (request.headers.authorization || "").startsWith("IWS ");
+      const metaFrom = (body) => ({
+        source: body._source === "admin" ? "admin" : viaIws ? "iws" : "api",
+        note: body._note
+      });
+
+      if (requestUrl.pathname === "/admin/api/config") {
+        if (request.method === "GET") {
+          sendJson(response, 200, stamp(loadConfig(cfgTool)), origin);
+          return;
+        }
+        if (request.method === "PUT") {
+          try {
+            const body = await readJsonBody(request, 1048576);
+            if (staleBase(body)) {
+              sendJson(response, 409, { error: STALE, _version: configVersion(cfgTool) }, origin);
+              return;
+            }
+            const partial = {};
+            for (const k of CONFIG_FIELDS) if (body[k] !== undefined) partial[k] = body[k];
+            sendJson(response, 200, stamp(saveConfig(partial, cfgTool, metaFrom(body))), origin);
+          } catch (error) {
+            sendJson(response, 400, { error: error.message }, origin);
+          }
+          return;
+        }
+      }
+
+      // Version history: every save, newest first, without the config bodies.
+      if (requestUrl.pathname === "/admin/api/config/history" && request.method === "GET") {
+        sendJson(response, 200, { tool: cfgTool, _version: configVersion(cfgTool), versions: listHistory(cfgTool) }, origin);
         return;
       }
-      if (request.method === "PUT") {
+
+      // One version in full, plus the one saved before it, so the panel can show exactly
+      // what that save changed.
+      const versionMatch = requestUrl.pathname.match(/^\/admin\/api\/config\/history\/([\w-]+)$/);
+      if (versionMatch && request.method === "GET") {
+        const entry = getHistory(cfgTool, versionMatch[1]);
+        if (!entry) {
+          sendJson(response, 404, { error: "No such version." }, origin);
+          return;
+        }
+        const ids = listHistory(cfgTool).map((v) => v.id);
+        const prevId = ids[ids.indexOf(entry.id) + 1];
+        sendJson(response, 200, { entry, previous: prevId ? getHistory(cfgTool, prevId) : null }, origin);
+        return;
+      }
+
+      if (requestUrl.pathname === "/admin/api/config/restore" && request.method === "POST") {
         try {
-          const body = await readJsonBody(request, 1048576);
-          const allowed = ["instructions", "model", "reasoningEffort", "enableWebSearch", "welcomeHeading", "welcomeText",
-            "placeholder", "chips", "rateLimitPerMin", "dailyCap"];
-          const partial = {};
-          for (const k of allowed) if (body[k] !== undefined) partial[k] = body[k];
-          sendJson(response, 200, { ...saveConfig(partial, cfgTool), _tool: cfgTool }, origin);
+          const body = await readJsonBody(request);
+          if (staleBase(body)) {
+            sendJson(response, 409, { error: STALE, _version: configVersion(cfgTool) }, origin);
+            return;
+          }
+          const before = configVersion(cfgTool);
+          const saved = restoreVersion(cfgTool, String(body.id || ""), metaFrom(body));
+          sendJson(response, 200, { ...stamp(saved), _restored: configVersion(cfgTool) !== before }, origin);
         } catch (error) {
           sendJson(response, 400, { error: error.message }, origin);
         }
@@ -2157,11 +2678,11 @@ const server = createServer(async (request, response) => {
         });
       }
 
-      // cfg already carries everything that differs between the two tools (the
-      // prompt, the wording, the model settings), so nothing else needs passing.
+      // cfg carries the prompt, wording and model settings; tool is passed as well so the
+      // catalog search can add the lamp finder's air-filter lookup.
       const openAIResponse = await createOpenAIResponse(conversation, cfg, wantsStream
-        ? { onDelta: (text) => sse("delta", { text }), signal: abort.signal }
-        : {});
+        ? { onDelta: (text) => sse("delta", { text }), signal: abort.signal, tool }
+        : { tool });
       const usedSources = [
         ...openAIResponse.usedSources,
         summarizeTools(openAIResponse.payload.output)
@@ -2187,10 +2708,16 @@ const server = createServer(async (request, response) => {
         finalReply = `${base}\n\nI'm not finding a document on file that matches that exact model — double-check the model number and I'll take another look.`.trim();
       }
 
+      // "Check real-time stock" button: offered for the in-stock products this reply links.
+      // Nothing is checked until the customer taps it (POST /api/stock-check).
+      const stockCheck = await stockCheckOffer(conversation, finalReply, getLatestUserMessage(conversation))
+        .catch(() => null);
+
       const result = {
         reply: finalReply,
         usedTools: usedSources ? `Used ${usedSources.replace(/^Used /, "")}` : "",
-        documents: shownDocuments
+        documents: shownDocuments,
+        ...(stockCheck ? { stockCheck } : {})
       };
 
       if (wantsStream) {
@@ -2204,7 +2731,7 @@ const server = createServer(async (request, response) => {
       }
       // admin test-mode sessions (TEST- prefix, via /finder?test=1) are not logged to the CRM
       if (!String(parsed.sessionId || "").startsWith("TEST-")) {
-        logChatToCrm(conversation, finalReply, usedSources, shownDocuments, parsed.sessionId, tool);
+        logChatToCrm(conversation, finalReply, usedSources, shownDocuments, parsed.sessionId, tool, openAIResponse.catalog);
       }
       return;
     } catch (error) {
@@ -2223,6 +2750,40 @@ const server = createServer(async (request, response) => {
     }
   }
 
+  // The "Check real-time stock" button. Body: { handles, sessionId, tool }. The handles
+  // are only a pointer: stock-check.mjs looks each product up again, reads the supplier's
+  // live stock through the cart-automation service, and writes the answer itself.
+  if (request.method === "POST" && requestUrl.pathname === "/api/stock-check") {
+    try {
+      const ip = (request.headers["x-forwarded-for"] || "").split(",")[0].trim()
+        || request.socket.remoteAddress || "unknown";
+      const rejection = stockCheckRejection(ip);
+      if (rejection) {
+        sendJson(response, 429, { error: rejection }, origin);
+        return;
+      }
+
+      const parsed = await readJsonBody(request, 10 * 1024);
+      const handles = Array.isArray(parsed.handles) ? parsed.handles.slice(0, 3) : [];
+      if (!handles.length) {
+        sendJson(response, 400, { error: "Nothing to check." }, origin);
+        return;
+      }
+
+      const { reply, rows } = await runStockCheck(handles);
+      sendJson(response, 200, { reply }, origin);
+
+      if (!String(parsed.sessionId || "").startsWith("TEST-")) {
+        const asked = [{ role: "user", content: `[Real-time stock check] ${rows.map((r) => r.title).join(" | ") || handles.join(" | ")}` }];
+        logChatToCrm(asked, reply, stockCheckSummary(rows), [], parsed.sessionId, resolveTool(parsed.tool), null);
+      }
+      return;
+    } catch (error) {
+      sendJson(response, 500, { error: "Stock check failed." }, origin);
+      return;
+    }
+  }
+
   // (removed 2026-07-19) /api/chat/ trailing-slash Chatbase chat-API proxy — the
   // first-party /api/chat engine above (exact match) is unaffected.
 
@@ -2232,4 +2793,11 @@ const server = createServer(async (request, response) => {
 const port = Number(process.env.PORT || 3000);
 server.listen(port, () => {
   console.log(`Help page server running at http://localhost:${port}`);
+  for (const tool of TOOLS) {
+    try {
+      if (ensureBaseline(tool)) console.log(`config history: recorded the live ${tool} config as its starting point`);
+    } catch (error) {
+      console.error(`config history: couldn't record the ${tool} starting point: ${error.message}`);
+    }
+  }
 });
