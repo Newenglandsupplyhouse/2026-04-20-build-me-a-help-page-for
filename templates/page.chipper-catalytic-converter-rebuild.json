@@ -3,7 +3,11 @@
     "main": {
       "type": "nesh-catalytic-converter-landing",
       "settings": {
-        "savings_callout_body": "Step 1:\nSend in your existing converter core.\n\nStep 2:\nWe inspect it, rebuild damaged internal components.\n\nStep 3:\nYou receive your rebuilt converter unit ready for installation."
+        "savings_callout_label": "Largest listed savings",
+        "savings_callout_amount": "$7,650",
+        "savings_callout_heading": "Morbark rebuild comparison",
+        "savings_callout_body": "",
+        "savings_callout_note": "See the brand-by-brand savings table for Bandit, Vermeer, and Morbark."
       }
     }
   },

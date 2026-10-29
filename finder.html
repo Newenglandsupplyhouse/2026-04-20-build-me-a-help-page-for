@@ -119,6 +119,24 @@
     }
     .stream-note { color: var(--muted); font-size: 13px; }
 
+    /* "Check real-time stock" — offered under replies that link an in-stock product */
+    .stock-offer { margin: -6px 0 16px; }
+    .stock-offer button {
+      display: inline-flex; align-items: center; gap: 9px; text-align: left;
+      background: var(--accent-soft); color: var(--text);
+      border: 1px solid #34467f; border-radius: 12px;
+      padding: 10px 14px; font-size: 13.5px; line-height: 1.35; cursor: pointer;
+      transition: background .15s, border-color .15s, transform .05s;
+    }
+    .stock-offer button:hover { background: #22305a; border-color: var(--accent); }
+    .stock-offer button:active { transform: translateY(1px); }
+    .stock-offer button:disabled { opacity: .5; cursor: default; }
+    .stock-offer .tick {
+      flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%;
+      display: grid; place-items: center; background: var(--accent); color: #fff; font-size: 12px;
+    }
+    .stock-offer small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+
     /* Composer */
     footer.composer {
       flex: 0 0 auto;
@@ -302,14 +320,75 @@
         return bubble;
       }
 
-      function addTyping() {
+      function addTyping(note) {
         const wrap = document.createElement("div");
         wrap.className = "col";
         wrap.dataset.typing = "1";
-        wrap.innerHTML = `<div class="msg assistant"><div class="bubble"><span class="typing"><i></i><i></i><i></i></span></div></div>`;
+        wrap.innerHTML = `<div class="msg assistant"><div class="bubble"><span class="typing"><i></i><i></i><i></i></span>`
+          + (note ? ` <span class="stream-note">${escapeHtml(note)}</span>` : "")
+          + `</div></div>`;
         chatEl.appendChild(wrap);
         scrollToBottom();
         return wrap;
+      }
+
+      // ---- "Check real-time stock" -------------------------------------
+      // The server offers this under a reply that links in-stock products. Nothing is
+      // checked until the customer taps it; the answer is written by the server.
+      function offerStockCheck(bubble, offer) {
+        const items = (offer && Array.isArray(offer.items) ? offer.items : []).filter((i) => i && i.handle);
+        if (!items.length || !bubble) return;
+        const col = bubble.closest(".col");
+        if (!col) return;
+        const wrap = document.createElement("div");
+        wrap.className = "stock-offer";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        const what = items.length === 1 ? `${items[0].title} is` : `these ${items.length} items are`;
+        btn.innerHTML = `<span class="tick">✓</span><span>Check real-time stock`
+          + `<small>Confirm ${escapeHtml(what)} available before you order</small></span>`;
+        btn.addEventListener("click", () => checkStock(items, wrap, btn));
+        wrap.appendChild(btn);
+        col.appendChild(wrap);
+        scrollToBottom();
+      }
+
+      async function checkStock(items, wrap, btn) {
+        if (busy) return;
+        btn.disabled = true;
+        const titles = items.map((i) => i.title).join(", ");
+        addMessage("user", "Check real-time stock");
+        conversation.push({ role: "user", content: `Please check real-time stock for: ${titles}` });
+        setBusy(true);
+        const typingEl = addTyping("Checking warehouse inventory…");
+        try {
+          const res = await fetch("/api/stock-check?tool=" + encodeURIComponent(finderTool), {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({ handles: items.map((i) => i.handle), sessionId, tool: finderTool })
+          });
+          const data = await res.json().catch(() => ({}));
+          typingEl.remove();
+          if (!res.ok || !data.reply) {
+            const msg = (res.status === 429 && data.error)
+              ? escapeHtml(data.error)
+              : "Sorry — I couldn't run the stock check just now. Please try again in a moment.";
+            addMessage("assistant", `<p>${msg}</p>`);
+            conversation.pop();
+            btn.disabled = false;
+            return;
+          }
+          wrap.remove();
+          addMessage("assistant", renderMarkdown(data.reply));
+          conversation.push({ role: "assistant", content: data.reply });
+        } catch (err) {
+          typingEl.remove();
+          addMessage("assistant", `<p>Network hiccup — I couldn't run the stock check. Please try again.</p>`);
+          conversation.pop();
+          btn.disabled = false;
+        } finally {
+          setBusy(false);
+        }
       }
 
       function scrollToBottom() {
@@ -465,14 +544,16 @@
             }
 
             const reply = data.reply || "No response.";
-            addMessage("assistant", renderMarkdown(reply));
+            const replyBubble = addMessage("assistant", renderMarkdown(reply));
             conversation.push({ role: "assistant", content: reply });
+            offerStockCheck(replyBubble, data.stockCheck);
             return;
           }
 
           let bubble = null;
           let streamed = "";
           let finalReply = "";
+          let stockOffer = null;
           let streamError = "";
           let repaint = null;
 
@@ -497,6 +578,7 @@
                 if (!repaint) repaint = setTimeout(paint, 60);
               } else if (name === "done" && data) {
                 finalReply = data.reply || "";
+                stockOffer = data.stockCheck || null;
               } else if (name === "error" && data) {
                 streamError = data.error || "stream error";
               }
@@ -520,6 +602,7 @@
               + (finalReply ? "" : `<p class="stream-note">That reply was cut off — please ask again.</p>`);
             scrollToBottom();
             conversation.push({ role: "assistant", content: answer });
+            if (finalReply) offerStockCheck(bubble, stockOffer);
             return;
           }
 

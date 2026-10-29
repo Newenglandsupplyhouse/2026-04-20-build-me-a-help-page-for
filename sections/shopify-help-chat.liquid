@@ -1,30 +1,58 @@
 {% liquid
   assign section_id = 'shopify-help-chat-' | append: section.id
-  assign chatbase_proxy_url = section.settings.chatbase_proxy_url | default: 'https://shopify-help-chat.onrender.com/chatbase-help'
-  assign chatbase_url = section.settings.chatbase_url | default: 'https://www.chatbase.co/iQxwux6_Bjma9xxVgm8Nb/help'
+  assign chatbase_proxy_url = section.settings.chatbase_proxy_url | default: 'https://shopify-help-chat.onrender.com/finder'
+  assign chatbase_url = section.settings.chatbase_url | default: 'https://shopify-help-chat.onrender.com/finder'
   assign iframe_url = chatbase_proxy_url
 
   if iframe_url == blank
     assign iframe_url = chatbase_url
   endif
+
+  assign intro_heading = ''
+  assign intro_body = ''
+  if request.page_type == 'page'
+    if page.content contains '</h1>'
+      assign intro_parts = page.content | split: '</h1>'
+      assign intro_heading = intro_parts[0] | strip_html | strip
+      assign intro_body = intro_parts[1]
+    else
+      assign intro_heading = page.title
+      assign intro_body = page.content
+    endif
+  endif
 %}
 
 <section class="shopify-chatbase-help" id="{{ section_id }}">
+  {% if intro_heading != blank %}
+    <header class="shopify-chatbase-help__intro">
+      <h1 class="shopify-chatbase-help__intro-heading">{{ intro_heading }}</h1>
+      <div class="shopify-chatbase-help__intro-actions">
+        {% if intro_body != blank and intro_body != '' %}
+          <details class="shopify-chatbase-help__intro-details">
+            <summary class="shopify-chatbase-help__intro-summary">About this tool</summary>
+            <div class="shopify-chatbase-help__intro-content">{{ intro_body }}</div>
+          </details>
+        {% endif %}
+        {% if iframe_url != blank %}
+          <button
+            class="shopify-chatbase-help__reset"
+            type="button"
+            aria-label="Start over"
+            title="Start over"
+          >
+            <span class="shopify-chatbase-help__reset-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M20 11a8 8 0 1 0-2.34 5.66" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M20 4v7h-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="shopify-chatbase-help__reset-text">Start over</span>
+          </button>
+        {% endif %}
+      </div>
+    </header>
+  {% endif %}
   {% if iframe_url != blank %}
-    <button
-      class="shopify-chatbase-help__reset"
-      type="button"
-      aria-label="Start over"
-      title="Start over"
-    >
-      <span class="shopify-chatbase-help__reset-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none">
-          <path d="M20 11a8 8 0 1 0-2.34 5.66" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M20 4v7h-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-      <span class="shopify-chatbase-help__reset-text">Start over</span>
-    </button>
     <iframe
       class="shopify-chatbase-help__frame"
       src="{{ iframe_url | escape }}"
@@ -45,6 +73,19 @@
     display: none !important;
   }
 
+  /* NESH 2026-08-20: this page is a full-height tool. Keep the nav header only —
+     announcement / utility / countdown / review bars just steal tool height. */
+  body.shopify-chatbase-help-page .announcement-bar-section,
+  body.shopify-chatbase-help-page .utility-bar,
+  body.shopify-chatbase-help-page .gta-widget.gta-bar,
+  body.shopify-chatbase-help-page [class*="GSC-BAR-"],
+  body.shopify-chatbase-help-page [class*="gsc-countdown"],
+  body.shopify-chatbase-help-page [id*="gsc-countdown"],
+  body.shopify-chatbase-help-page [class*="ai-countdown-timer-"],
+  body.shopify-chatbase-help-page [class*="CountdownTimer"] {
+    display: none !important;
+  }
+
   body.shopify-chatbase-help-page footer,
   body.shopify-chatbase-help-page .shopify-section-group-footer-group,
   body.shopify-chatbase-help-page [id*="shopify-section"][id*="footer"] {
@@ -60,8 +101,93 @@
     height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
     min-height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
     position: relative;
+    /* NESH 2026-08-20: keep this section's internal z-index (2..5) from competing with
+       the sticky header (z-index 3), which made the dark bar paint over nav dropdowns.
+       The section is overflow:hidden, so nothing inside needs to escape it. */
+    isolation: isolate;
     background: #08080b;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help__intro {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    background: #08080b;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    position: relative;
+    z-index: 4;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help__intro-heading {
+    margin: 0;
+    color: #f5f5f7;
+    font-size: 15px;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help__intro-details {
+    position: relative;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help__intro-summary {
+    color: #a2a3aa;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 600;
+    list-style-position: inside;
+    user-select: none;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help__intro-summary:hover {
+    color: #f5f5f7;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help__intro-content {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 10px);
+    width: min(560px, calc(100vw - 32px));
+    max-height: min(55vh, calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset) - 96px));
+    overflow: auto;
+    background: #111116;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    padding: 16px 18px;
+    z-index: 5;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  }
+
+  #{{ section_id }} .shopify-chatbase-help__intro-content h2 {
+    margin: 12px 0 6px;
+    color: #f5f5f7;
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help__intro-content p,
+  #{{ section_id }} .shopify-chatbase-help__intro-content li {
+    color: #c7c8cd;
+    font-size: 13px;
+    line-height: 1.55;
+    margin: 6px 0;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help__intro-content ul {
+    margin: 8px 0;
+    padding-left: 18px;
+  }
+
+  #{{ section_id }} .shopify-chatbase-help__intro-content strong {
+    color: #f5f5f7;
   }
 
   @media screen and (max-width: 749px) {
@@ -79,8 +205,9 @@
   #{{ section_id }} .shopify-chatbase-help__frame {
     display: block;
     width: 100%;
-    height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
-    min-height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
     border: 0;
     background: #08080b;
     transform: translateY(var(--shopify-help-mobile-frame-shift));
@@ -89,8 +216,9 @@
   }
 
   #{{ section_id }} .shopify-chatbase-help__empty {
-    height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
-    min-height: calc(var(--shopify-help-viewport-height) - var(--shopify-help-header-offset));
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
     display: grid;
     place-items: center;
     padding: 24px;
@@ -114,31 +242,33 @@
     line-height: 1.6;
   }
 
+  #{{ section_id }} .shopify-chatbase-help__intro-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
   #{{ section_id }} .shopify-chatbase-help__reset {
-    position: absolute;
-    right: max(18px, calc(50% - 340px));
-    bottom: max(calc(240px + var(--shopify-help-safe-bottom)), 24px);
-    z-index: 3;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    min-height: 40px;
-    padding: 0 14px;
+    gap: 6px;
+    min-height: 28px;
+    padding: 0 12px;
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 999px;
-    background: rgba(17, 17, 22, 0.92);
-    color: #f5f5f7;
-    font-size: 13px;
+    background: transparent;
+    color: #a2a3aa;
+    font-size: 12.5px;
     font-weight: 600;
     line-height: 1;
     cursor: pointer;
-    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   }
 
   #{{ section_id }} .shopify-chatbase-help__reset:hover {
-    background: rgba(31, 31, 38, 0.98);
+    background: rgba(255, 255, 255, 0.06);
     border-color: rgba(255, 255, 255, 0.22);
-    transform: translateY(-1px);
+    color: #f5f5f7;
   }
 
   #{{ section_id }} .shopify-chatbase-help__reset:focus-visible {
@@ -174,16 +304,32 @@
     }
 
     #{{ section_id }} .shopify-chatbase-help__reset {
-      left: 50%;
-      right: auto;
-      top: auto;
-      bottom: max(calc(22px + var(--shopify-help-safe-bottom)), 12px);
-      transform: translateX(-50%);
-      min-height: 36px;
-      padding: 0 12px;
-      font-size: 12px;
+      min-height: 26px;
+      padding: 0 10px;
+      font-size: 11.5px;
       pointer-events: auto;
       touch-action: manipulation;
+    }
+
+    #{{ section_id }} .shopify-chatbase-help__intro {
+      padding: 7px 12px;
+    }
+
+    #{{ section_id }} .shopify-chatbase-help__intro-heading {
+      font-size: 13.5px;
+    }
+
+    #{{ section_id }} .shopify-chatbase-help__intro-summary {
+      font-size: 12px;
+    }
+
+    #{{ section_id }} .shopify-chatbase-help__intro-content {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      top: auto;
+      width: auto;
+      max-height: 60vh;
     }
   }
 </style>
@@ -266,9 +412,10 @@
       }, 0);
 
       const fallbackOffset = window.innerWidth <= 749 ? 0 : 164;
-      const headerOffset = window.innerWidth <= 749
-        ? measuredOffset
-        : Math.max(measuredOffset, fallbackOffset);
+      // NESH 2026-08-20: trust a real measurement when we have one. The 164px desktop
+      // floor was reserving room for announcement bars this page no longer renders,
+      // which cost the tool ~40px of height.
+      const headerOffset = measuredOffset > 0 ? measuredOffset : fallbackOffset;
 
       root.style.setProperty("--shopify-help-header-offset", `${headerOffset}px`);
     };
@@ -370,8 +517,8 @@
         const baseUrl = new URL(initialSrc, window.location.href);
         const freshUrl = new URL(baseUrl.toString());
         freshUrl.searchParams.set("reset", String(Date.now()));
-        const resetUrl = new URL("/chatbase-help/reset", baseUrl.origin);
-        resetUrl.searchParams.set("next", freshUrl.toString());
+        // finder state lives in-page; a fresh load is a full reset
+        const resetUrl = freshUrl;
         frame.setAttribute("src", "about:blank");
         window.setTimeout(() => {
           frame.setAttribute("src", resetUrl.toString());
@@ -401,6 +548,20 @@
       if (!isMobileViewport()) {
         loadFreshFrame();
       }
+    }
+
+    const introDetails = root.querySelector(".shopify-chatbase-help__intro-details");
+    if (introDetails) {
+      introDetails.addEventListener("toggle", () => {
+        // NESH 2026-08-20: measure how many people actually open "About this tool".
+        // Guarded on .open because "toggle" also fires on close, which would double-count.
+        if (introDetails.open && typeof window.gtag === "function") {
+          window.gtag("event", "about_tool_open");
+        }
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && introDetails.open) introDetails.open = false;
+      });
     }
 
     updateViewportHeight();
@@ -435,6 +596,9 @@
   })();
 </script>
 
+
+<p style="text-align:center;font-size:13px;line-height:1.6;color:#8a94a6;margin:26px auto 10px;max-width:640px;padding:0 16px">This AI Parts Finder is built by <a href="https://arcturus-consulting.com/parts-finder/" style="color:#2563eb;text-decoration:underline" rel="noopener">Arcturus Consulting</a> &mdash; add plain-English parts search to your own store.</p>
+
 {% schema %}
 {
   "name": "Shopify Help Chat",
@@ -443,7 +607,7 @@
       "type": "url",
       "id": "chatbase_proxy_url",
       "label": "Chatbase proxy URL",
-      "info": "Recommended. Paste your proxied help page URL, for example https://shopify-help-chat.onrender.com/chatbase-help"
+      "info": "Recommended. Paste your proxied help page URL, for example https://shopify-help-chat.onrender.com/finder"
     },
     {
       "type": "url",

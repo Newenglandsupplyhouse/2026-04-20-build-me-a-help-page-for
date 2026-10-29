@@ -42,6 +42,18 @@
       font-weight: 800;
       text-transform: uppercase;
     }
+    .nesh-cc-claim {
+      max-width: 760px;
+      margin: 10px 0 20px;
+      padding: 14px 22px;
+      font-size: clamp(20px, 2.6vw, 30px);
+      font-weight: 800;
+      line-height: 1.22;
+      color: #c2410c;
+      border: 2px solid var(--orange);
+      border-radius: 12px;
+      background: var(--warm);
+    }
     .nesh-cc-title {
       margin: 0;
       max-width: 850px;
@@ -126,8 +138,8 @@
       display: block;
       width: 100%;
       max-width: 460px;
-      aspect-ratio: 1 / 1;
-      object-fit: cover;
+      aspect-ratio: 2000 / 2150;
+      object-fit: contain;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #fff;
@@ -280,10 +292,22 @@
     }
     .nesh-cc-card h3 { margin: 0 0 10px; }
     .nesh-cc-card ul { margin: 0; padding-left: 20px; }
+    .nesh-cc-identify-note { margin: 18px 0 0; color: var(--muted, #49525c); font-size: 15px; }
+    .nesh-cc-identify-note a { color: var(--ink); font-weight: 600; }
+    .nesh-cc-photo-card img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: contain;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      margin: 0 0 14px;
+    }
     .nesh-cc-steps {
       counter-reset: step;
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 14px;
     }
     .nesh-cc-step {
@@ -392,20 +416,21 @@
       <div>
         <p class="nesh-cc-kicker">D&S catalytic converter rebuilds</p>
         <h1 class="nesh-cc-title" id="nesh-cc-title">Rebuilt catalytic converters for Bandit, Morbark, and Vermeer wood chippers</h1>
-        <p class="nesh-cc-subtitle">Send in your existing converter core. New England Supply House inspects it, rebuilds damaged internal components, and returns the unit ready for installation on compatible equipment.</p>
+        <p class="nesh-cc-claim">The only company in the U.S. rebuilding wood chipper catalytic converters</p>
+        <p class="nesh-cc-subtitle">We rebuild catalytic converters for any wood chipper &mdash; Bandit, Morbark, Vermeer, and every other make. Send in your existing converter core: we inspect it, rebuild the damaged internal components, and return the unit ready for installation.</p>
         <div class="nesh-cc-actions">
           <a class="nesh-cc-button" href="/products/replacement-catalytic-converter-bandit-vermeer-morbark">Order the rebuild</a>
           <a class="nesh-cc-button secondary" href="tel:17747016374">Call 774-701-6374</a>
         </div>
         <div class="nesh-cc-trust" aria-label="Key details">
-          <div class="nesh-cc-pill"><strong>Save up to $3,700</strong><span>Brand-by-brand savings compared with new replacement converter pricing.</span></div>
-          <div class="nesh-cc-pill"><strong>3-5 day turnaround</strong><span>After your converter core is received. Expedited service is available.</span></div>
+          <div class="nesh-cc-pill"><strong>Save up to $7,650</strong><span>Brand-by-brand savings compared with new replacement converter pricing.</span></div>
+          <div class="nesh-cc-pill"><strong>1–2 day turnaround</strong><span>After your converter core is received. Expedited service is available.</span></div>
           <div class="nesh-cc-pill"><strong>OEM-quality rebuild</strong><span>Craftsmanship guaranteed, inspected, rebuilt, and prepared for confident reinstallation.</span></div>
         </div>
       </div>
       <aside class="nesh-cc-product" aria-label="Catalytic converter rebuild product">
         <div class="nesh-cc-product-image">
-          <img class="nesh-cc-product-photo" src="https://cdn.shopify.com/s/files/1/0725/0034/7102/files/FullSizeRender_ae7d25d8-df4d-4cba-acd8-2dd4c173f780.jpg?v=1765762910" alt="D&S catalytic converter rebuild parts for Bandit, Vermeer, and Morbark wood chippers" loading="eager">
+          <img class="nesh-cc-product-photo" src="https://cdn.shopify.com/s/files/1/0725/0034/7102/files/before-after-full-note.jpg?v=1792290261" alt="Before and after: a worn wood chipper catalytic converter next to the same unit rebuilt by New England Supply House" loading="eager">
         </div>
         <div class="nesh-cc-product-copy">
           <h2>Rebuilt converter cores</h2>
@@ -424,28 +449,28 @@
               <tr>
                 <th>Brand</th>
                 <th>New price</th>
-                <th>Rebuild price</th>
-                <th>Savings</th>
+                <th>Rebuild price (gas / diesel)</th>
+                <th>Savings (gas / diesel)</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>Bandit</td>
-                <td>$2,350</td>
-                <td>$1,750</td>
-                <td><strong>$600</strong></td>
+                <td>About $9,000</td>
+                <td>$1,350 / $1,750</td>
+                <td><strong>$7,650 / $7,250</strong></td>
               </tr>
               <tr>
                 <td>Vermeer</td>
-                <td>$2,550</td>
-                <td>$1,150</td>
-                <td><strong>$1,400</strong></td>
+                <td>About $9,000</td>
+                <td>$1,350 / $1,750</td>
+                <td><strong>$7,650 / $7,250</strong></td>
               </tr>
               <tr>
                 <td>Morbark</td>
-                <td>$7,200</td>
-                <td>$3,500</td>
-                <td><strong>$3,700</strong></td>
+                <td>About $9,000</td>
+                <td>$1,350 / $1,750</td>
+                <td><strong>$7,650 / $7,250</strong></td>
               </tr>
             </tbody>
           </table>
@@ -472,16 +497,37 @@
     <section class="nesh-cc-section">
       <h2>How the rebuild works</h2>
       <div class="nesh-cc-steps">
-        <article class="nesh-cc-step"><h3>Order online</h3><p>Choose the D&S Bandit, Morbark, or Vermeer rebuild option.</p></article>
-        <article class="nesh-cc-step"><h3>Send your core</h3><p>New England Supply House sends instructions for shipping your existing converter.</p></article>
-        <article class="nesh-cc-step"><h3>Inspection and rebuild</h3><p>The unit is inspected and damaged internal components are rebuilt.</p></article>
-        <article class="nesh-cc-step"><h3>Return and install</h3><p>Your rebuilt converter is returned for installation on compatible equipment.</p></article>
+        <article class="nesh-cc-step"><h3>Place your order</h3><p>Order the rebuild you need &mdash; gas or diesel &mdash; on the product page.</p></article>
+        <article class="nesh-cc-step"><h3>Get your converter to us</h3><p>Choose drop-off or shipping at checkout and we&rsquo;ll send instructions &mdash; drop-off is by appointment at our Foxboro shop, or ship it to us from anywhere in the country. We rebuild your unit with new internals.</p></article>
+        <article class="nesh-cc-step"><h3>Back to work in 1&ndash;2 business days (typically)</h3><p>Standard turnaround is 1&ndash;2 business days. Need it sooner? Ask about our 24-hour rush rebuild.</p></article>
       </div>
+    </section>
+
+    <section class="nesh-cc-section" id="identify">
+      <h2>Before you send your core: what we need to know</h2>
+      <div class="nesh-cc-grid">
+        <article class="nesh-cc-card nesh-cc-photo-card">
+          <img src="https://cdn.shopify.com/s/files/1/0725/0034/7102/files/01-dual-cat-inlet-flange-note.jpg?v=1792290285" alt="End view of a wood chipper catalytic converter showing the four-bolt inlet flange" loading="lazy">
+          <h3>1. Your chipper and engine</h3>
+          <p>Note the chipper make, model, and engine from the machine's serial plate. Bandit, Morbark, and Vermeer each use several converter versions, and the engine tells us which one you have.</p>
+        </article>
+        <article class="nesh-cc-card nesh-cc-photo-card">
+          <img src="https://cdn.shopify.com/s/files/1/0725/0034/7102/files/09-dual-cat-new-full-note.jpg?v=1792290282" alt="Full view of a rebuilt wood chipper catalytic converter on a white background" loading="lazy">
+          <h3>2. A photo of the whole converter</h3>
+          <p>One shot of the full unit and one straight into the flange, like the photos here. Count the flange bolt holes and note any cracks, rattles, or melted substrate you have already found.</p>
+        </article>
+        <article class="nesh-cc-card nesh-cc-photo-card">
+          <img src="https://cdn.shopify.com/s/files/1/0725/0034/7102/files/05-dcl-minex-label-plate.jpg?v=1792284633" alt="Catalytic converter data plate showing the manufacturer model number, serial number, and flow arrow" loading="lazy">
+          <h3>3. Any tag or stamped numbers</h3>
+          <p>Some converters carry a data plate with a model number, serial number, and flow arrow, like this one. If yours has one, photograph it. If not, the chipper details above are enough to get started.</p>
+        </article>
+      </div>
+      <p class="nesh-cc-identify-note">Representative photos. Your converter may look very different depending on your machine and engine. Not sure what you have? Call <a href="tel:17747016374">774-701-6374</a> and text or email the photos. We will confirm fit before you ship anything.</p>
     </section>
 
     <section class="nesh-cc-section">
       <div class="nesh-cc-grid">
-        <article class="nesh-cc-card"><h3>Available options</h3><ul><li>D&S Bandit rebuild</li><li>D&S Morbark rebuild</li><li>D&S Vermeer rebuild</li></ul></article>
+        <article class="nesh-cc-card"><h3>Available options</h3><ul><li>D&S Bandit rebuild</li><li>D&S Morbark rebuild</li><li>D&S Vermeer rebuild</li><li>All other makes &amp; models &mdash; call to confirm fit</li></ul></article>
         <article class="nesh-cc-card"><h3>Good fit for</h3><ul><li>Tree service companies</li><li>Wood chipper repair shops</li><li>Land clearing contractors</li><li>Equipment fleets</li></ul></article>
         <article class="nesh-cc-card"><h3>Questions before ordering?</h3><p>Call New England Supply House at <a href="tel:17747016374">774-701-6374</a> or review the product page for current stock and checkout options.</p></article>
       </div>
@@ -495,7 +541,8 @@
           <a class="nesh-cc-button" href="/products/replacement-catalytic-converter-bandit-vermeer-morbark">Order the rebuild</a>
           <a class="nesh-cc-button secondary" href="tel:17747016374">Call 774-701-6374</a>
         </div>
-        <div class="nesh-cc-note">Confirm fitment and applicable emissions requirements before ordering. Typical turnaround is 3-5 days after your converter core is received. Expedited service is available.</div>
+        <div class="nesh-cc-note">Confirm fitment and applicable emissions requirements before ordering. Typical turnaround is 1–2 days after your converter core is received. Expedited service is available.</div>
+        <div class="nesh-cc-note">Rebuilds are performed under our in-house rebuild brand, <a href="https://ds-website-e4n.pages.dev/">D&amp;S Catalytic Converter Rebuilds</a> &mdash; see the D&amp;S site for <a href="https://ds-website-e4n.pages.dev/symptoms.html">failing-converter symptoms</a>, <a href="https://ds-website-e4n.pages.dev/rebuild-vs-replace.html">rebuild vs. replace</a>, and <a href="https://ds-website-e4n.pages.dev/dealers.html">dealer</a> / <a href="https://ds-website-e4n.pages.dev/partner-program.html">shop partner</a> programs.</div>
       </div>
     </section>
   </div>
@@ -515,7 +562,7 @@
       "type": "text",
       "id": "savings_callout_amount",
       "label": "Savings callout amount",
-      "default": "$3,700"
+      "default": "$7,650"
     },
     {
       "type": "text",
@@ -527,7 +574,7 @@
       "type": "textarea",
       "id": "savings_callout_body",
       "label": "Savings callout body",
-      "default": "Step 1:\nSend in your existing converter core.\n\nStep 2:\nWe inspect it, rebuild damaged internal components.\n\nStep 3:\nYou receive your rebuilt converter unit ready for installation."
+      "default": "Step 1:\nPlace your order — gas or diesel.\n\nStep 2:\nChoose drop-off or shipping at checkout; we send instructions.\n\nStep 3:\nBack to work in 1–2 business days."
     },
     {
       "type": "textarea",
