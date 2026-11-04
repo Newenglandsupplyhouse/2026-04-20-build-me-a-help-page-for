@@ -7,6 +7,8 @@
 // Usage: node buyback_offer.mjs pull <dir>   -> saves current page + product JSON to <dir>
 //        node buyback_offer.mjs dry  <dir>   -> shows what would change (idempotent: skips if data-nesh-buyback present)
 //        node buyback_offer.mjs apply <dir>  -> PUTs the new bodies
+// --- page ---
+// --- products ---
 import fs from "fs"; import os from "os"; import path from "path";
 const SERVICE="srv-d93e90gjs32c73c79itg";
 const renderKey=fs.readFileSync(path.join(os.homedir(),".render-api-key.txt"),"utf8").trim();
@@ -14,24 +16,17 @@ const ev=await fetch(`https://api.render.com/v1/services/${SERVICE}/env-vars?lim
 const vars=await ev.json(); const kv=k=>{const v=vars.find(v=>(v.envVar||v).key===k);return v?(v.envVar||v).value:null;};
 const TOKEN=kv("SHOPIFY_ADMIN_TOKEN"), STORE=kv("SHOPIFY_STORE_DOMAIN"), VER=kv("SHOPIFY_API_VERSION")||"2025-07";
 const api=async(p,opts={})=>{const r=await fetch(`https://${STORE}/admin/api/${VER}${p}`,{...opts,headers:{"X-Shopify-Access-Token":TOKEN,"content-type":"application/json"}});const t=await r.text();let j;try{j=JSON.parse(t)}catch{j={raw:t.slice(0,300)}}return{s:r.status,j};};
-const cmd=process.argv[2]; const OUT=process.argv[3]; const THEME="158241915102";
-
-const api=async(p,opts={})=>{const r=await fetch(`https://${STORE}/admin/api/${VER}${p}`,{...opts,headers:{"X-Shopify-Access-Token":TOKEN,"content-type":"application/json",...(opts.headers||{})}});const t=await r.text();let j;try{j=JSON.parse(t)}catch{j={raw:t.slice(0,300)}}return{s:r.status,j};};
-
+const cmd=process.argv[2]; const OUT=process.argv[3]; if(!OUT){console.log("usage: node buyback_offer.mjs pull|dry|apply <dir>");process.exit(1);}
 if(cmd==="pull"){
-  for(const key of ["sections/nesh-catalytic-converter-landing.liquid","templates/page.chipper-catalytic-converter-rebuild.json","templates/product.json","sections/main-product.liquid"]){
-    const r=await api(`/themes/${THEME}/assets.json?asset[key]=${encodeURIComponent(key)}`);
-    if(r.s===200&&r.j.asset){fs.writeFileSync(path.join(OUT,key.replace(/\//g,"__")),r.j.asset.value||"");console.log("pulled",key,(r.j.asset.value||"").length,"chars");}
-    else console.log("FAILED",key,r.s,JSON.stringify(r.j).slice(0,200));
-  }
+  fs.mkdirSync(OUT,{recursive:true});
+  const r=await api("/pages.json?handle=wood-chipper-catalytic-converter-program"); const pg=r.j.pages?.[0]; if(!pg){console.log("no page",r.s);process.exit(1);}
+  fs.writeFileSync(path.join(OUT,"page__program.json"),JSON.stringify(pg,null,2)); console.log("page",pg.id,"body",pg.body_html.length,"chars");
   for(const h of ["bandit-wood-chipper-catalytic-converter-rebuild","morbark-wood-chipper-catalytic-converter-rebuild","vermeer-wood-chipper-catalytic-converter-rebuild"]){
-    const r=await api(`/products.json?handle=${h}&fields=id,handle,title,body_html,tags`);
-    const p=r.j.products?.[0]; if(!p){console.log("no product",h,r.s);continue;}
-    fs.writeFileSync(path.join(OUT,`product__${h}.json`),JSON.stringify(p,null,2)); console.log("product",p.id,h,"body",p.body_html.length,"chars; tags:",p.tags);
+    const q=await api("/products.json?handle="+h+"&fields=id,handle,title,body_html,tags"); const p=q.j.products?.[0]; if(!p){console.log("no product",h,q.s);continue;}
+    fs.writeFileSync(path.join(OUT,"product__"+h+".json"),JSON.stringify(p,null,2)); console.log("product",p.id,h,"body",p.body_html.length,"chars");
   }
+  process.exit(0);
 }
-
-if(cmd==="dry"||cmd==="apply"){
 const APPLY=cmd==="apply";
 const L=OUT;
 
@@ -93,6 +88,4 @@ for(const b of ["bandit","morbark","vermeer"]){
   const newBody=p.body_html.slice(0,i)+PRODUCT_BLOCK+p.body_html.slice(i);
   console.log(`${b} ${p.id}: insert before closing Questions line (body ${p.body_html.length} -> ${newBody.length})`);
   if(APPLY){ const r=await api(`/products/${p.id}.json`,{method:"PUT",body:JSON.stringify({product:{id:p.id,body_html:newBody}})}); console.log("  PUT product:",r.s,r.s===200?"ok":JSON.stringify(r.j).slice(0,300)); }
-}
-
 }
