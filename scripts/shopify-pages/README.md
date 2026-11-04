@@ -26,3 +26,21 @@ Note: `sections/nesh-catalytic-converter-landing.liquid` in this repo still carr
 $7,650 savings; the live theme section has $1,550 / $7,450, and the program page itself uses the default page
 template with its own body. A theme push would not change the program page but would put the stale section
 back on the live theme.
+
+## Scrap cat page (2026-11-04)
+
+`scrap_cat_page.mjs` creates and maintains the Google-indexable buyback page at
+`/pages/scrap-wood-chipper-catalytic-converters` (page id 133187928286, default page template, all content in
+`body_html`, SEO title/description in the `global.title_tag` / `global.description_tag` metafields). It also adds a
+link to that page inside the `#nesh-buy-cat` section of the program page and after the buyback blurb on the
+Bandit/Morbark/Vermeer rebuild products (marker `data-nesh-scrap-link`). Run `buyback_offer.mjs` first on a fresh
+store; the links anchor on what it inserts.
+
+```
+node scripts/shopify-pages/scrap_cat_page.mjs pull <dir>    # back up current page/program/products JSON
+node scripts/shopify-pages/scrap_cat_page.mjs dry <dir>     # show what would change
+node scripts/shopify-pages/scrap_cat_page.mjs apply <dir>   # create/update page + metafields + links
+```
+
+To change the page copy, edit `PAGE_HTML` / `FAQ` in the script and re-run `pull` then `apply`. Shopify
+re-serializes the stored body (whitespace only), so the unchanged check compares with whitespace collapsed.
