@@ -26,15 +26,15 @@ const ID="nesh_inbound_label";
 // ---- the Liquid (shared copy; product block and cart section differ only in their guard)
 const OFFER_INNER=`{%- assign nesh_lbl = all_products['${LABEL_HANDLE}'] -%}
 {%- if nesh_lbl.available -%}
-<div class="nesh-inbound-offer" style="margin:1.2rem 0;padding:1rem 1.2rem;border:1px solid #d9e2ec;border-radius:10px;background:#f4f7fa;font-size:.95rem;line-height:1.5;">
-  <p style="margin:0 0 .4rem;font-weight:700;font-size:1.05rem;">Need a label to ship your converter to us?</p>
-  <p style="margin:0 0 .6rem;">Add a prepaid <strong>UPS Ground label at our commercial rate</strong>: {{ nesh_lbl.price | money }}, box up to 24 x 24 x 24 in and 40 lb, insured for $5,000, emailed to you within 1 business day. <strong>The shipping you pay at checkout covers us sending the rebuilt converter back to you; this label covers getting your converter to us.</strong></p>
+<div class="nesh-inbound-offer" style="margin:1.2rem 0;padding:1rem 1.2rem;border:1px solid #d9e2ec;border-radius:10px;background:#f4f7fa;color:#1f2933;font-size:.95rem;line-height:1.5;">
+  <p style="margin:0 0 .4rem;font-weight:700;font-size:1.05rem;color:#0f4872;">Need a label to ship your converter to us?</p>
+  <p style="margin:0 0 .6rem;color:#1f2933;">Add a prepaid <strong>UPS Ground label at our commercial rate</strong>: {{ nesh_lbl.price | money }}, box up to 24 x 24 x 24 in and 40 lb, insured for $5,000, emailed to you within 1 business day. <strong>The shipping you pay at checkout covers us sending the rebuilt converter back to you; this label covers getting your converter to us.</strong></p>
   <p style="margin:0 0 .8rem;color:#52606d;">Only worth it if you do not have your own UPS or FedEx account with preferred rates. If you do, shipping it yourself will likely cost less.</p>
   <form method="post" action="/cart/add" style="margin:0;">
     <input type="hidden" name="id" value="{{ nesh_lbl.selected_or_first_available_variant.id }}">
     <input type="hidden" name="quantity" value="1">
-    <button type="submit" class="button button--secondary" style="margin:0;">Add prepaid inbound label &middot; {{ nesh_lbl.price | money }}</button>
-    <a href="{{ nesh_lbl.url }}" style="margin-left:1rem;text-decoration:underline;">Details</a>
+    <button type="submit" style="margin:0;padding:.7rem 1.2rem;border:0;border-radius:6px;background:#0f4872;color:#fff;font-weight:600;cursor:pointer;">Add prepaid inbound label &middot; {{ nesh_lbl.price | money }}</button>
+    <a href="{{ nesh_lbl.url }}" style="margin-left:1rem;color:#0f4872;text-decoration:underline;">Details</a>
   </form>
 </div>
 {%- endif -%}`;
