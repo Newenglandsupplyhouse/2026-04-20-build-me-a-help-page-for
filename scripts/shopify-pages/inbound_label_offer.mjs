@@ -1,7 +1,7 @@
 // Inbound-label offer (2026-11-05, Jason: "on the checkout page, lets make this an offer for them to add").
 // The store is on the Grow plan, so the checkout page itself cannot be customised (that needs Shopify Plus).
 // This puts the offer at the two places before checkout that the theme (Dawn, live theme "NESH Live") does control:
-//   1. templates/product.json  -> a `custom_liquid` block under the buy buttons of main-product that renders only on
+//   1. (removed 2026-11-05 at Jason's request: no offer on product pages; PRODUCT_LIQUID kept for reference only)
 //      products tagged both `rebuild` and `catalytic-converter` (the Bandit/Morbark/Vermeer rebuilds).
 //   2. templates/cart.json     -> a `custom-liquid` section between the cart items and the cart footer that renders
 //      only when the cart holds a rebuild and does not yet hold the label.
@@ -74,8 +74,10 @@ if(cmd==="remove"){
   if(pHas){delete main.blocks[ID]; main.block_order=main.block_order.filter(b=>b!==ID);}
   if(cHas){delete cj.sections[ID]; cj.order=cj.order.filter(s=>s!==ID);}
 }else{
-  main.blocks[ID]={type:"custom_liquid",settings:{custom_liquid:PRODUCT_LIQUID}};
-  if(!pHas){const i=main.block_order.indexOf("buy_buttons"); main.block_order.splice(i>=0?i+1:main.block_order.length,0,ID);}
+  // 2026-11-05 Jason: "Do not list this offer on the product page, only on the checkout page, so as not to confuse customers"
+  // -> the product-page block is never installed (and is removed if present); only the cart-page section stays.
+  if(pHas){delete main.blocks[ID]; main.block_order=main.block_order.filter(b=>b!==ID);}
+  void PRODUCT_LIQUID;
   cj.sections[ID]={type:"custom-liquid",settings:{custom_liquid:CART_LIQUID,color_scheme:"background-2",padding_top:0,padding_bottom:24}};
   if(!cHas){const i=cj.order.indexOf("cart-footer"); cj.order.splice(i>=0?i:cj.order.length,0,ID);}
 }
