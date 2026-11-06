@@ -19,42 +19,44 @@ if(!["dry","apply"].includes(cmd)||!PRICE||isNaN(+PRICE)){console.log("usage: no
 const APPLY=cmd==="apply";
 
 const HANDLE="prepaid-inbound-shipping-label";
-const TITLE="Prepaid Inbound Shipping Label: Ship Your Converter to Us (UPS Ground, $5,000 coverage)";
+const TITLE="$250 Flat Rate Shipping Label: Send Your Unit to Us";
 const SKU="NESH-INBOUND-LABEL";
-const SEO_TITLE="Prepaid UPS Label to Ship Your Chipper Cat to Us for Rebuild | NESH";
-const SEO_DESC="Optional add-on for a wood chipper catalytic converter rebuild: a prepaid UPS Ground label at our commercial rate to ship your converter to New England Supply House. Box up to 24 x 24 x 24 in and 40 lb, $5,000 coverage.";
+const SEO_TITLE="$250 Flat Rate Shipping Label to Send Your Unit to Us | NESH";
+const SEO_DESC="A prepaid UPS Ground shipping label you use to send your wood chipper catalytic converter to New England Supply House for rebuild. One flat $250 covers any address in the lower 48, a box up to 24 x 24 x 24 in and 40 lb, and $5,000 of coverage.";
 
 const BODY=`<div class="nesh-inbound-label">
-<p><strong>This is a label for shipping your converter TO us.</strong> It is an optional add-on for a catalytic converter rebuild. The shipping you pay at checkout covers us sending the rebuilt converter back to you; it does not cover getting your converter here. If you do not have your own UPS or FedEx account with preferred rates, this label is usually far cheaper than paying walk-in counter rates, which can run $300 or more for a box this size. If you do have an account with good rates, ship it yourself and skip this.</p>
+<p><strong>This is a shipping label, not a part.</strong> You use it to send your unit <strong>to us</strong>. Buy it, we email you a prepaid UPS Ground label, you put it on the box, and your converter ships to our shop in Massachusetts for its rebuild. Nothing is mailed to you.</p>
 
-<h2>What you get</h2>
-<ul>
-<li>A prepaid <strong>UPS Ground</strong> label from the shipping address on your order to our shop in Massachusetts, emailed to you within <strong>1 business day</strong> (Monday to Friday).</li>
-<li>Coverage of <strong>$5,000</strong> against loss or damage in transit.</li>
-<li>Tracking shared with you, so you know when it lands and we know when to expect it.</li>
-</ul>
+<p>One flat price, <strong>$250</strong>, from any address in the lower 48 states. No weighing, no zone pricing, no surprise at the UPS counter, where a box this size can run $300 or more at walk-in rates.</p>
 
-<h2>What it covers</h2>
+<h2>What the $250 covers</h2>
 <ul>
+<li>A prepaid <strong>UPS Ground</strong> label from the shipping address on your order to New England Supply House.</li>
 <li>One box up to <strong>24 x 24 x 24 inches</strong> and <strong>40 pounds</strong>. That fits any wood chipper catalytic converter we rebuild (Bandit, Morbark, Vermeer, and others) with packing around it.</li>
-<li>Shipping from any address in the lower 48 states. Alaska, Hawaii, and Puerto Rico: <a href="mailto:jason@newenglandsupplyhouse.com">email us</a> for a quote before you buy.</li>
-<li>Heavier or larger than that? <a href="mailto:jason@newenglandsupplyhouse.com">Email us</a> the box size and weight first and we will quote it.</li>
+<li><strong>$5,000</strong> of coverage against loss or damage in transit.</li>
+<li>Tracking, so you see it moving and we know when to expect it.</li>
 </ul>
+
+<h2>Return shipping is separate</h2>
+<p>The shipping you pay at checkout on your rebuild order covers us sending the rebuilt converter <strong>back to you</strong>. It does not cover getting your unit here. This label is the inbound leg.</p>
+
+<h2>Who should buy this</h2>
+<p>Anyone without their own UPS or FedEx account with preferred rates. If you do have an account with good rates, ship the unit yourself and skip this label. It will almost certainly cost you less.</p>
 
 <h2>How it works</h2>
 <ol>
-<li>Add this label to your rebuild order. Use the address the box will ship from as your shipping address at checkout, and make sure your email is correct.</li>
-<li>We email you the label as a PDF within 1 business day.</li>
+<li>Add this label to your rebuild order. At checkout, use the address the box will ship <em>from</em> as your shipping address, and check that your email is correct.</li>
+<li>We email you the label as a PDF within <strong>1 business day</strong> (Monday to Friday).</li>
 <li>Box the converter, tape the label on, and drop it at any UPS location, or schedule a UPS pickup from your address (UPS charges its own pickup fee).</li>
 </ol>
 
-<h2>Packing the converter</h2>
-<p>Drain it and let it cool. Wrap it so nothing can rattle, fill the empty space in the box, and tape every seam. The housing takes a beating in transit if it can move. Damage caused by loose packing is not covered.</p>
+<h2>Packing the unit</h2>
+<p>Let it cool and drain it. Wrap it so nothing can rattle, fill the empty space in the box, and tape every seam. The housing takes a beating in transit if it can move. Damage caused by loose packing is not covered.</p>
 
 <h2>Good to know</h2>
 <ul>
+<li>Alaska, Hawaii, and Puerto Rico, or a box bigger or heavier than the limits above: <a href="mailto:jason@newenglandsupplyhouse.com">email us</a> for a quote before you buy.</li>
 <li>Not shipped yet after 30 days? Email us and we refund the label in full.</li>
-<li>This is a shipping label, not a part. Nothing is mailed to you; the label arrives by email.</li>
 <li>Selling us a scrap converter through our <a href="/pages/scrap-wood-chipper-catalytic-converters">buyback program</a>? You do not need this. We send that label free once you accept our offer.</li>
 </ul>
 </div>`;
