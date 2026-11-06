@@ -10,6 +10,10 @@ import {
 import {
   isStockAsk, STOCK_BUTTON_NOTE, stockCheckOffer, stockCheckRejection, runStockCheck, stockCheckSummary
 } from "./stock-check.mjs";
+import {
+  isPhotoAsk, PHOTO_BUTTON_NOTE, photoOffer, photoRequestRejection, startPhotoRequest, photoRequestStatus,
+  workerAuthorized, claimPhotoJob, finishPhotoJob, photoMessage, photoSummary
+} from "./photo-request.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1991,6 +1995,10 @@ async function createOpenAIResponse(conversation, cfg = null, options = {}) {
   if (isStockAsk(getLatestUserMessage(conversation))) {
     input.unshift({ role: "system", content: [{ type: "input_text", text: STOCK_BUTTON_NOTE }] });
   }
+  // A request to see a part: point at the "Show product photos" button (HVAC finder only; see photo-request.mjs).
+  if (options.tool !== "lamp" && isPhotoAsk(getLatestUserMessage(conversation))) {
+    input.unshift({ role: "system", content: [{ type: "input_text", text: PHOTO_BUTTON_NOTE }] });
+  }
   if (shopifyContext?.text) {
     input.unshift({
       role: "system",
@@ -2712,12 +2720,16 @@ const server = createServer(async (request, response) => {
       // Nothing is checked until the customer taps it (POST /api/stock-check).
       const stockCheck = await stockCheckOffer(conversation, finalReply, getLatestUserMessage(conversation))
         .catch(() => null);
+      // "Show product photos" button: only when the customer asked to see a part (photo-request.mjs).
+      const photos = tool === "lamp" ? null : await photoOffer(conversation, finalReply, getLatestUserMessage(conversation))
+        .catch(() => null);
 
       const result = {
         reply: finalReply,
         usedTools: usedSources ? `Used ${usedSources.replace(/^Used /, "")}` : "",
         documents: shownDocuments,
-        ...(stockCheck ? { stockCheck } : {})
+        ...(stockCheck ? { stockCheck } : {}),
+        ...(photos ? { photoOffer: photos } : {})
       };
 
       if (wantsStream) {
@@ -2780,6 +2792,70 @@ const server = createServer(async (request, response) => {
       return;
     } catch (error) {
       sendJson(response, 500, { error: "Stock check failed." }, origin);
+      return;
+    }
+  }
+
+  // "Show product photos" (photo-request.mjs). Body: { handle, sessionId, tool }. The handle is only a pointer:
+  // the product is looked up again, and a part that already has photos is answered from the store at once.
+  if (request.method === "POST" && requestUrl.pathname === "/api/photo-request") {
+    try {
+      const ip = (request.headers["x-forwarded-for"] || "").split(",")[0].trim()
+        || request.socket.remoteAddress || "unknown";
+      const rejection = photoRequestRejection(ip);
+      if (rejection) {
+        sendJson(response, 429, { error: rejection }, origin);
+        return;
+      }
+      const parsed = await readJsonBody(request, 10 * 1024);
+      const handle = String(parsed.handle || "").toLowerCase();
+      const result = await startPhotoRequest(handle, { sessionId: String(parsed.sessionId || ""), tool: String(parsed.tool || "") });
+      if (result.status === "invalid") {
+        sendJson(response, 400, { error: "No photos to look up for that item." }, origin);
+        return;
+      }
+      sendJson(response, 200, { status: result.status, id: result.id, reply: result.reply, images: result.images }, origin);
+      if (result.reply && !String(parsed.sessionId || "").startsWith("TEST-")) {
+        const asked = [{ role: "user", content: `[Photo request] ${result.title || handle}` }];
+        logChatToCrm(asked, result.reply, `photo-request ${handle}=${result.status}${result.note ? ` [${result.note}]` : ""}`, [], parsed.sessionId, resolveTool(parsed.tool), null);
+      }
+      return;
+    } catch (error) {
+      sendJson(response, 500, { error: "Photo request failed." }, origin);
+      return;
+    }
+  }
+
+  // The finder page polls a queued request until the office-PC worker reports back.
+  const photoStatusMatch = requestUrl.pathname.match(/^\/api\/photo-request\/([0-9a-f-]{36})$/);
+  if (request.method === "GET" && photoStatusMatch) {
+    const status = photoRequestStatus(photoStatusMatch[1]);
+    sendJson(response, 200, { status: status.status, reply: status.reply, images: status.images }, origin);
+    return;
+  }
+
+  // The office-PC worker (X-Photo-Key). Anything without the key gets the same 404 as an unknown path.
+  if (request.method === "POST" && requestUrl.pathname.startsWith("/api/photo-jobs/") && workerAuthorized(request)) {
+    try {
+      if (requestUrl.pathname === "/api/photo-jobs/claim") {
+        const job = claimPhotoJob();
+        if (!job) { response.writeHead(204); response.end(); return; }
+        sendJson(response, 200, job, origin);
+        return;
+      }
+      const resultMatch = requestUrl.pathname.match(/^\/api\/photo-jobs\/([0-9a-f-]{36})\/result$/);
+      if (resultMatch) {
+        const parsed = await readJsonBody(request, 64 * 1024);
+        const job = finishPhotoJob(resultMatch[1], parsed);
+        sendJson(response, 200, { ok: !!job }, origin);
+        if (job && !String(job.sessionId || "").startsWith("TEST-")) {
+          const asked = [{ role: "user", content: `[Photo request] ${job.title}` }];
+          logChatToCrm(asked, photoMessage(job), photoSummary(job), [], job.sessionId, resolveTool(job.tool), null);
+        }
+        return;
+      }
+    } catch (error) {
+      sendJson(response, 500, { error: "photo job failed" }, origin);
       return;
     }
   }
