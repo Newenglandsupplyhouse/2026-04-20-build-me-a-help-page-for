@@ -136,6 +136,10 @@
       display: grid; place-items: center; background: var(--accent); color: #fff; font-size: 12px;
     }
     .stock-offer small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .photo-offer { display: flex; flex-wrap: wrap; gap: 8px; }
+    .bubble .reply-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; }
+    .bubble .reply-photos a { display: block; }
+    .bubble .reply-photos img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #fff; border-radius: 8px; border: 1px solid var(--border); }
 
     /* Composer */
     footer.composer {
@@ -391,6 +395,77 @@
         }
       }
 
+      // ---- "Show product photos" ---------------------------------------
+      // Offered when the customer asked to see a part. A tap asks the server for that one
+      // product's photos; if they have to be fetched, the page waits for them (about 10-30 s).
+      function offerPhotos(bubble, offer) {
+        const items = (offer && Array.isArray(offer.items) ? offer.items : []).filter((i) => i && i.handle);
+        if (!items.length || !bubble) return;
+        const col = bubble.closest(".col");
+        if (!col) return;
+        const wrap = document.createElement("div");
+        wrap.className = "stock-offer photo-offer";
+        for (const item of items) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.innerHTML = `<span class="tick">&#9635;</span><span>Show product photos`
+            + `<small>${escapeHtml(item.title)}</small></span>`;
+          btn.addEventListener("click", () => showPhotos(item, wrap, btn));
+          wrap.appendChild(btn);
+        }
+        col.appendChild(wrap);
+        scrollToBottom();
+      }
+
+      function photoHtml(reply, images) {
+        const pics = (Array.isArray(images) ? images : []).filter((u) => /^https:\/\/cdn\.shopify\.com\//.test(u));
+        return renderMarkdown(reply) + (pics.length
+          ? `<div class="reply-photos">${pics.map((u) => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener"><img src="${escapeHtml(u + (u.includes("?") ? "&" : "?") + "width=600")}" alt="product photo" loading="lazy"></a>`).join("")}</div>`
+          : "");
+      }
+
+      async function showPhotos(item, wrap, btn) {
+        if (busy) return;
+        btn.disabled = true;
+        addMessage("user", "Show product photos");
+        conversation.push({ role: "user", content: `Please show photos of: ${item.title}` });
+        setBusy(true);
+        const typingEl = addTyping("Pulling up photos…");
+        const fail = (msg) => {
+          typingEl.remove();
+          addMessage("assistant", `<p>${msg}</p>`);
+          conversation.pop();
+          btn.disabled = false;
+        };
+        try {
+          const res = await fetch("/api/photo-request?tool=" + encodeURIComponent(finderTool), {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({ handle: item.handle, sessionId, tool: finderTool })
+          });
+          let data = await res.json().catch(() => ({}));
+          if (!res.ok) return fail(res.status === 429 && data.error ? escapeHtml(data.error) : "Sorry, I couldn't request photos just now. Please try again in a moment.");
+          // queued: wait for the photos (polling), up to about two minutes
+          const started = Date.now();
+          while ((data.status === "queued" || data.status === "working") && data.id && Date.now() - started < 120000) {
+            await new Promise((r) => setTimeout(r, 2500));
+            const poll = await fetch("/api/photo-request/" + encodeURIComponent(data.id), { headers: { "Accept": "application/json" } });
+            const next = await poll.json().catch(() => ({}));
+            data = { ...next, id: data.id };
+          }
+          if (!data.reply) return fail("Photos are taking longer than usual. Please check the product page in a few minutes, or try again.");
+          typingEl.remove();
+          btn.remove();
+          if (!wrap.querySelector("button")) wrap.remove();
+          addMessage("assistant", photoHtml(data.reply, data.images));
+          conversation.push({ role: "assistant", content: data.reply });
+        } catch (err) {
+          fail("Network hiccup. I couldn't request photos. Please try again.");
+        } finally {
+          setBusy(false);
+        }
+      }
+
       function scrollToBottom() {
         requestAnimationFrame(() => { chatEl.scrollTop = chatEl.scrollHeight; });
       }
@@ -547,6 +622,7 @@
             const replyBubble = addMessage("assistant", renderMarkdown(reply));
             conversation.push({ role: "assistant", content: reply });
             offerStockCheck(replyBubble, data.stockCheck);
+            offerPhotos(replyBubble, data.photoOffer);
             return;
           }
 
@@ -554,6 +630,7 @@
           let streamed = "";
           let finalReply = "";
           let stockOffer = null;
+          let photoOffer = null;
           let streamError = "";
           let repaint = null;
 
@@ -579,6 +656,7 @@
               } else if (name === "done" && data) {
                 finalReply = data.reply || "";
                 stockOffer = data.stockCheck || null;
+                photoOffer = data.photoOffer || null;
               } else if (name === "error" && data) {
                 streamError = data.error || "stream error";
               }
@@ -603,6 +681,7 @@
             scrollToBottom();
             conversation.push({ role: "assistant", content: answer });
             if (finalReply) offerStockCheck(bubble, stockOffer);
+            if (finalReply) offerPhotos(bubble, photoOffer);
             return;
           }
 
