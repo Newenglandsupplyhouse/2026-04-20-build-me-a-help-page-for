@@ -2034,7 +2034,7 @@ async function createOpenAIResponse(conversation, cfg = null, options = {}) {
       reasoning: { effort: reasoningEffort },
       // Agent behavior is managed in /admin (persisted in finder-config.json); the default is
       // the Chatbase "Base Instructions" export adapted for these native tools.
-      instructions: config.instructions
+      instructions: withTapToAnswer(config.instructions)
     })
   });
 
@@ -2114,6 +2114,21 @@ function renderFinderPage(template, cfg, tool = "hvac") {
     // It was a hardcoded HVAC string, so /lamp-finder announced itself as the HVAC tool.
     .replace("__CFG_TITLE__", escapeHtmlServer(
       tool === "lamp" ? "Projector Lamp Finder" : "HVAC Parts & Diagnostic Assistant"));
+}
+
+// Tap-to-answer: finder.html turns a final "Options: A | B" line into buttons. The rule
+// lives in code, not only in the default prompt, so it still applies when the operator
+// has saved their own instructions in /admin. Skipped if the saved text already has it.
+const TAP_TO_ANSWER_RULE = `
+
+TAP-TO-ANSWER (always applies)
+- When you ask your one question and its likely answers are specific items from the search results (two part numbers, two model numbers, two brands' versions of the part, two lamp numbers), end the reply with one final line in exactly this form:
+Options: <answer 1> | <answer 2>
+- Give 2 to 4 answers, each copied exactly from the results and each searchable on its own (a part number, a model number, or a brand plus part type). This line is the one list of choices you may give.
+- The page turns that line into buttons the customer taps instead of typing, so write the question itself in the sentence before it and never mention the buttons. No Options line on a reply that asks no question, and never an option like "yes", "no", "not sure" or "other".`;
+function withTapToAnswer(instructions) {
+  const text = String(instructions || "");
+  return /TAP-TO-ANSWER/.test(text) ? text : text + TAP_TO_ANSWER_RULE;
 }
 
 // Admin gate (HTTP Basic, username blank). Locked in the cloud until ADMIN_PASSWORD is set;
