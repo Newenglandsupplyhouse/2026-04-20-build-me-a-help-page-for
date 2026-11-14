@@ -24,6 +24,9 @@ const CATALOG = [
   P("Nordyne 626602 Limit Switch", "626602"),
   P("Weil Mclain 382-200-750 Maintenance Kit, GV90+", "382-200-750"),
   P("Rheem SP20305A Water Heater Gas Valve GG40T06AVG01", "SP20305A"),
+  P("York S1-025-32625-000 Hot Surface Igniter", "S1-025-32625-000"),
+  P("York S1-325-35802-000 Gas Valve, Single Stage", "S1-325-35802-000"),
+  P("York S1-024-27632-000 Pressure Switch", "S1-024-27632-000"),
 ];
 const index = (p) => { const toks = new Set(); for (const f of [p.title, p.variants.nodes[0].sku, ...p.tags, p.description]) for (const w of String(f).toLowerCase().split(/\s+/)) { const c = w.replace(/^[^a-z0-9]+|[^a-z0-9+]+$/g, ""); if (!c) continue; toks.add(c.replace(/[^a-z0-9]/g, "")); for (const piece of c.split(/[^a-z0-9]+/)) if (piece) toks.add(piece); } return toks; };
 const IDX = CATALOG.map((p) => [p, index(p)]);
@@ -73,6 +76,28 @@ for (const [msg, tool, want, mustSay] of CASES) {
   const ok = want === null ? titles.length === 0 : titles.length > 0 && titles[0].toLowerCase().includes(want) && (!mustSay || ctx.text.toLowerCase().includes(mustSay));
   if (!ok) fail += 1;
   console.log(`${ok ? "PASS" : "FAIL"}  [${tool}] ${msg.padEnd(48)} -> ${titles.length ? titles.slice(0, 2).join(" ; ") + (titles.length > 2 ? ` (+${titles.length - 2})` : "") : "(nothing shown)"}`);
+}
+// Earlier turns count (HVAC only): [turns, tool, first title must include | null, text must include, text must NOT include]
+const U = (content) => ({ role: "user", content }), A = (content) => ({ role: "assistant", content });
+const CONVS = [
+  [[U("I have a York furnace"), A("Which part do you need?"), U("I need the igniter")], "hvac", "york s1-025-32625-000", "equipment is york"],
+  [[U(""), A("That is a York gas furnace - model YP9C060B12MP12CA."), U("igniter")], "hvac", "york s1-025-32625-000", "equipment is york"],
+  [[U("York YP9C060B12MP12CA")], "hvac", null, "options: york blower motor | york inducer motor | york igniter"],
+  [[U("my furnace is a York"), A("What do you need?"), U("YP9C060B12MP12CA")], "hvac", null, "options: york blower motor"],
+  [[U("YP9C060B12MP12CA")], "hvac", null, "do not offer any other product", "options:"],
+  [[U("I have a York furnace"), A("ok"), U("honeywell igniter")], "hvac", "honeywell q3400a10", null, "equipment is york"],
+  [[U("I have a York furnace"), A("ok"), U("Q3400A1024")], "hvac", "q3400a1024", null, "options:"],
+  [[A("We carry the Rheem 62-102635-81 control board."), U("igniter")], "hvac", "igni", null, "equipment is"],
+  [[U("I have a Lennox furnace"), A("ok"), U("igniter")], "hvac", "igni", null, "equipment is"],
+  [[U("I have a York projector"), A("ok"), U("SP-LAMP-024")], "lamp", "sp-lamp-024", null, "options:"],
+];
+for (const [turns, tool, want, mustSay, mustNot] of CONVS) {
+  const ctx = await mod.__ctx(turns, { tool });
+  const titles = (ctx.text.match(/^- .*?(?= \|)/gm) || []).map((t) => t.slice(2));
+  const low = ctx.text.toLowerCase();
+  const ok = (want === null ? titles.length === 0 : titles.length > 0 && titles[0].toLowerCase().includes(want)) && (!mustSay || low.includes(mustSay)) && (!mustNot || !low.includes(mustNot));
+  if (!ok) fail += 1;
+  console.log(`${ok ? "PASS" : "FAIL"}  [${tool}] ${turns.map((t) => t.content || "(photo)").join(" > ").slice(0, 70).padEnd(70)} -> ${titles.length ? titles.slice(0, 2).join(" ; ") : (low.match(/options: .*/) || ["(nothing shown)"])[0]}`);
 }
 console.log(fail ? `${fail} FAILED` : "ALL PASS");
 fs.unlinkSync(tmp); process.exit(fail ? 1 : 0);

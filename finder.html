@@ -830,7 +830,13 @@
       if (suggestionsWrap) {
         suggestionsWrap.addEventListener("click", (e) => {
           const btn = e.target.closest("button[data-q]");
-          if (btn) { send(btn.getAttribute("data-q")); }
+          if (btn) { send(btn.getAttribute("data-q")); return; }
+          // A "type your own" chip: nothing is sent; the box is focused and says what to type.
+          const ask = e.target.closest("button[data-type]");
+          if (ask) {
+            inputEl.placeholder = ask.getAttribute("data-type");
+            inputEl.focus();
+          }
         });
       }
 

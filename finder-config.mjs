@@ -189,7 +189,7 @@ export const DEFAULT_CONFIG = {
   placeholder: "Example: Do you have Goodman 0130F00506 Furnace Pressure Switch?",
   chips: [
     { label: "Find a replacement igniter / control module", sub: "By unit model or symptom", q: "I need a replacement ignition control module for a gas furnace. How do I find the right one?" },
-    { label: "Cross-reference a part number", sub: "OEM → in-stock equivalent", q: "Can you cross-reference a part number to what you carry? I have OEM part 62-102635-81." },
+    { label: "Cross-reference a part number", sub: "OEM → in-stock equivalent", q: "Can you cross-reference a part number to what you carry?", type: true, prompt: "Type the part number from your old part, e.g. the number on its label" },
     { label: "Diagnose a no-heat issue", sub: "Symptom → likely parts", q: "My furnace has no heat and the igniter never glows. What parts should I check?" },
     { label: "See parts for my brand", sub: "Goodman, Rheem, Trane, Reznor & more", q: "What HVAC brands and manufacturers do you carry parts for?" },
   ],
