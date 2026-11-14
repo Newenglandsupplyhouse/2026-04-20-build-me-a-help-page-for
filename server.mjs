@@ -1178,6 +1178,113 @@ function namesCode(product, code) {
   return fields.some((field) => containsCode(field, squished));
 }
 
+// ---- The same part number, written differently ------------------------------------------
+// Shopify matches whole words, so the customer's punctuation has to agree with the listing's:
+// "TB6575A 1000" never finds "TB6575A1000", "S1-02634637000" never finds "S1-026-34637-000",
+// and "821OG095" (letter O for zero) never finds "8210G095". 90 days of chat logs
+// (2026-08-13..11-12) show these as the most common false "we don't carry it". This is NOT
+// fuzzy matching: each rewrite keeps the same letters and digits in the same order (or swaps
+// a letter O that touches a digit for a zero), is searched on its own, and a result only
+// counts when the listing names it (see namesAnyForm). A wrong rewrite finds nothing.
+const squishCode = (code) => String(code || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+// York / Source 1 numbers are 3-5-3 digits, listed dashed with or without the "S1-".
+function yorkForms(squished) {
+  const m = /^(?:s1)?(\d{3})(\d{5})(\d{3})$/.exec(squished);
+  return m ? [`S1-${m[1]}-${m[2]}-${m[3]}`, `${m[1]}-${m[2]}-${m[3]}`, `s1${m[1]}${m[2]}${m[3]}`] : [];
+}
+// A letter O next to a digit is almost always a mistyped zero ("GG40TO6AVG01").
+const oAsZero = (squished) => squished.replace(/(?<=\d)o|o(?=\d)/g, "0");
+const FORMAT_VARIANT_GROUPS = 3;
+// [{ asked, kind, searches: [terms to send Shopify], forms: [squished spellings a listing may show] }]
+function codeFormatVariants(userText) {
+  const words = String(userText || "").replace(/:/g, " ").split(/\s+/)
+    .map((w) => w.replace(/[?!.,;:]+$/, "").replace(/^[#(\[]+|[)\]]+$/g, ""))
+    .filter(Boolean);
+  const groups = [];
+  const seen = new Set();
+  const add = (asked, squished, kind) => {
+    if (squished.length < 5 || !/\d/.test(squished) || seen.has(squished)) return;
+    seen.add(squished);
+    const searches = [];
+    const forms = new Set();
+    const zeroed = oAsZero(squished);
+    for (const form of zeroed === squished ? [squished] : [squished, zeroed]) {
+      // The as-typed spelling is already searched by the ordinary ladder.
+      if (form !== asked.toLowerCase()) searches.push(form);
+      forms.add(form);
+      for (const y of yorkForms(form)) {
+        if (/-/.test(y)) { if (y.toLowerCase() !== asked.toLowerCase()) searches.push(y); }
+        forms.add(squishCode(y));
+      }
+    }
+    if (!searches.length) return;
+    groups.push({ asked, kind: zeroed === squished ? kind : "letter-o", searches: [...new Set(searches)].slice(0, 4), forms: [...forms] });
+  };
+  for (let i = 0; i < words.length && groups.length < FORMAT_VARIANT_GROUPS; i += 1) {
+    const word = words[i];
+    // A number typed in pieces: a piece with a digit in it, then one or two all-digit pieces
+    // ("TB6575A 1000", "Q3400A 1040", "024 36873 207"). Never a lone digit (a quantity).
+    if (/\d/.test(word) && /^[A-Za-z0-9-]{2,}$/.test(word) && /^\d{2,6}$/.test(words[i + 1] || "")) {
+      const run = [word, words[i + 1]];
+      if (/^\d{2,6}$/.test(words[i + 2] || "")) run.push(words[i + 2]);
+      add(run.join(" "), squishCode(run.join("")), "spaced");
+      if (run.length === 3) add(run.slice(0, 2).join(" "), squishCode(run.slice(0, 2).join("")), "spaced");
+    }
+    if (isPartCodeTerm(word)) add(word, squishCode(word), "punctuation");
+  }
+  return groups.slice(0, FORMAT_VARIANT_GROUPS);
+}
+// Does the listing name any of these spellings (title, tags, SKU)? Same test the rest of
+// the search uses, so "02634637000" is found inside "S1-026-34637-000" but "2634637000" is not.
+function namesAnyForm(product, forms) {
+  const fields = [product.title, ...(product.tags || []), ...(product.variants?.nodes || []).map((v) => v.sku)]
+    .map(squishCode);
+  return forms.some((form) => fields.some((field) => containsCode(field, form)));
+}
+// ...or mention it in the description ("fits XN/ZE048"), punctuation between characters allowed.
+function describesAnyForm(product, forms) {
+  const text = String(product.description || "").toLowerCase();
+  if (!text) return false;
+  return forms.some((form) => new RegExp(`(?<![a-z0-9])${form.split("").join("[-\\s./]?")}(?![0-9])`).test(text));
+}
+// Every part number in the message with the spellings a listing could show it under: as typed,
+// without a revision letter, packaging suffix or maker code, and the rewrites above.
+function askedCodeGroups(userText, variants) {
+  const query = buildShopifySearchQuery(userText);
+  if (!query || query.includes(":")) return [];
+  const groups = new Map();
+  const put = (asked, forms) => {
+    const key = squishCode(asked);
+    const group = groups.get(key) || { asked, forms: new Set() };
+    for (const form of forms) if (form && form.length >= 4) group.forms.add(form);
+    groups.set(key, group);
+  };
+  // The first piece of a number typed in pieces ("SV9500M 2682") is matched as typed only:
+  // with its trailing letter dropped it "named" the SV9500 test lead kit, a different product.
+  const pieces = new Set(variants.filter((v) => v.kind === "spaced").flatMap((v) => v.asked.split(" ").map(squishCode)));
+  for (const term of query.split(" ").filter(isPartCodeTerm)) {
+    const bare = withoutPackagingSuffix(term);
+    const unprefixed = withoutPackagingSuffix(withoutMakerPrefix(term));
+    const forms = [term, bare, unprefixed].map(squishCode);
+    if (!pieces.has(squishCode(term))) {
+      for (const t of [bare, unprefixed]) {
+        const clean = t.replace(/[^A-Za-z0-9-]/g, "");
+        forms.push(squishCode(stripCodeSuffix(clean)));
+      }
+    }
+    put(term, forms);
+  }
+  for (const v of variants) {
+    // A spaced number covers the pieces it was typed in.
+    const parts = v.kind === "spaced" ? v.asked.split(" ").map(squishCode) : [squishCode(v.asked)];
+    let merged = false;
+    for (const piece of parts) if (groups.has(piece)) { put(groups.get(piece).asked, v.forms); merged = true; }
+    if (!merged) put(v.asked, v.forms);
+  }
+  return [...groups.values()].map((g) => ({ asked: g.asked, forms: [...g.forms] }));
+}
+const LAMP_FINDER_PAGE = "https://newenglandsupplyhouse.com/pages/projector-lamp-finder";
+
 const SEARCH_MAX_TERMS = 8;
 
 function buildShopifySearchQuery(userText) {
@@ -1768,8 +1875,24 @@ async function getShopifyProductContext(conversation, options = {}) {
   const usedQueries = [];
   let namedTheProduct = false;
   const prefixed = makerPrefixCodes(latestUserMessage);
+  // The same number in the catalog's punctuation (codeFormatVariants). Started now so it
+  // runs alongside the ladder; only listings that name the rewritten number are kept.
+  const variants = searchCandidates[0].includes(":") ? [] : codeFormatVariants(latestUserMessage);
+  const variantSearch = Promise.all(variants.map(async (v) => {
+    const found = (await Promise.all(v.searches.map((term) => runSearch(term).catch(() => [])))).flat();
+    return found.filter((product) => namesAnyForm(product, v.forms));
+  }));
+  // The HVAC finder never shows projector listings. The site-search half already kept them
+  // out (siteResultFits); this half did not, so "024 36873 207" came back as an InFocus
+  // SP-LAMP-024 and "Concord 80" as cinema xenon lamps. The lamp finder is unchanged.
+  let projectorOnlyHits = 0;
   for (const candidate of searchCandidates) {
     let results = await runSearch(candidate);
+    if (tool === "hvac") {
+      const kept = results.filter((product) => !PROJECTOR_LISTING.test(String(product.title || "")));
+      projectorOnlyHits += results.length - kept.length;
+      results = kept;
+    }
     // A rung searched on a number with its maker code taken off only keeps listings that name
     // that number - "VSX130361EH" -> "130361EH" must not pull in whatever else matches.
     const required = prefixed.filter((d) => candidate.split(" ").includes(d.bare));
@@ -1782,14 +1905,42 @@ async function getShopifyProductContext(conversation, options = {}) {
     }
     if (pool.size && (!productWords.length || namedTheProduct)) break;
   }
+  // Listings found under the catalog's punctuation join the pool; note which rewrites hit.
+  const variantHits = [];
+  (await variantSearch).forEach((found, i) => {
+    const fits = found.filter((product) => tool === "lamp" || !PROJECTOR_LISTING.test(String(product.title || "")));
+    if (!fits.length) return;
+    variantHits.push(variants[i]);
+    usedQueries.push(variants[i].searches[0]);
+    for (const product of fits) {
+      const key = product.handle || product.id;
+      if (!pool.has(key)) pool.set(key, product);
+    }
+  });
   // Rank and fit on the bare numbers too: a title says "Q3400A1024", never "HONQ3400A1024".
-  const rankText = [latestUserMessage, ...prefixed.map((d) => d.bare)].join(" ");
+  const rankText = [latestUserMessage, ...prefixed.map((d) => d.bare), ...variantHits.flatMap((v) => v.forms)].join(" ");
   const askedCodes = productQueryTokens(rankText).codes;
   for (const product of await siteSearch) {
     if (!pool.has(product.handle) && siteResultFits(product, tool, askedCodes)) pool.set(product.handle, product);
   }
-  const matched = [...pool.values()];
+  let matched = [...pool.values()];
   const usedQuery = usedQueries.join(" / ");
+
+  // HVAC finder: a part number no listing names. The ladder drops words until something
+  // matches, so the model was handed whatever shared a word or a fragment and offered it as
+  // a "closest match" (a Rheem board for York S1-33102984000, a test lead kit for
+  // SV9500M2682). When the customer gave only numbers, keep only listings that name one. When
+  // they also said what kind of part they need ("blower motor for YP9C060B12MP12CA"), the
+  // number is usually their unit's model: keep the parts of that kind, and say so below.
+  const codeGroups = tool === "hvac" ? askedCodeGroups(latestUserMessage, variants) : [];
+  const namesGroup = (product, group) => namesAnyForm(product, group.forms) || describesAnyForm(product, group.forms);
+  const unnamedCodes = codeGroups.filter((group) => !matched.some((product) => namesGroup(product, group)));
+  const queryWords = buildShopifySearchQuery(latestUserMessage).split(" ")
+    .filter((term) => !isPartCodeTerm(term) && !/^\d+$/.test(term));
+  const saysWhatKind = queryWords.some((term) => searchTermWeight(term) === 1) || productWords.length > 0;
+  if (unnamedCodes.length && !saysWhatKind) {
+    matched = matched.filter((product) => codeGroups.some((group) => namesGroup(product, group)));
+  }
 
   const products = rankProductsForQuery(matched, rankText, SHOPIFY_CONTEXT_PRODUCTS);
   // Lamp finder only: the air-filter lookup rides alongside the ordinary results. The HVAC
@@ -1797,12 +1948,20 @@ async function getShopifyProductContext(conversation, options = {}) {
   const filterBlock = tool === "lamp" && wantsLampFilterSearch(conversation)
     ? await lampFilterContext(conversation, runSearch)
     : "";
+  const unnamedList = unnamedCodes.map((group) => `"${group.asked}"`).join(", ");
   if (!products.length) {
+    const why = [`Live Shopify product search for "${latestUserMessage}" returned no matches.`];
+    if (unnamedCodes.length) {
+      why.push(`No listing in our catalog names ${unnamedList} (checked with and without dashes, spaces, prefixes and revision letters). Say plainly that we do not list that number. Do not offer any other product as a match, a "closest match" or a replacement for it.`);
+    }
+    if (projectorOnlyHits) {
+      why.push(`Only projector lamp listings matched, and this is the HVAC finder. If the customer is after a projector lamp, point them to the Projector Lamp Finder: ${LAMP_FINDER_PAGE}`);
+    }
     return {
       source: "shopify",
       searchQuery,
       handles: [],
-      text: [`Live Shopify product search for "${latestUserMessage}" returned no matches.`, filterBlock].filter(Boolean).join("\n\n")
+      text: [why.join("\n"), filterBlock].filter(Boolean).join("\n\n")
     };
   }
 
@@ -1810,6 +1969,16 @@ async function getShopifyProductContext(conversation, options = {}) {
     `Live Shopify product search results for "${latestUserMessage}" using query "${usedQuery}":`
   ];
   if (products.some((product) => lampType(product))) lines.push(LAMP_TYPE_NOTE);
+  for (const v of variantHits) {
+    const listed = products.find((product) => namesAnyForm(product, v.forms));
+    if (!listed) continue;
+    lines.push(v.kind === "letter-o"
+      ? `Note: "${v.asked}" matched a listing once a letter O was read as a zero. Name the number exactly as the listing shows it and ask the customer to confirm it is the number on their part.`
+      : `Note: "${v.asked}" is the same part number as a listing below, written with different spacing or dashes. That listing IS the part the customer asked for - not a "closest match". Call it by the listing's own number.`);
+  }
+  if (unnamedCodes.length) {
+    lines.push(`Note: no listing names ${unnamedList}. It may be the model number of the customer's equipment rather than a part number. The products below matched the kind of part the customer described, NOT that number: do not call any of them a match, a "closest match" or a replacement for ${unnamedList}. Offer them only as the parts of that kind we carry, and say the customer should confirm fit against their old part's number.`);
+  }
   // Say so when a match came from dropping a packaging suffix, or the model hedges the
   // exact part into a "closest match" because the title lacks the "/U".
   for (const { asked, bare } of prefixed) {
