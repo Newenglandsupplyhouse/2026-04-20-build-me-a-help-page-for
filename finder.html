@@ -275,14 +275,30 @@
         }[c]));
       }
 
+      // Store links get UTM tags so a sale that starts in the chat shows up in Shopify as
+      // "parts-finder / chat / lamp-finder" (or hvac-parts-finder) instead of this site's URL.
+      // Links that already carry utm_source, and links to other sites, are left as they are.
+      // Only the href changes; the link text the customer sees stays the plain URL.
+      const UTM_CAMPAIGN = finderTool === "lamp" ? "lamp-finder" : "hvac-parts-finder";
+      function tagStoreLink(url) {
+        // url arrives HTML-escaped (& is &amp;), so work on the raw form and re-escape
+        const raw = url.replace(/&amp;/g, "&");
+        if (!/^https?:\/\/(www\.)?newenglandsupplyhouse\.com(\/|$|\?|#)/i.test(raw) || /[?&]utm_source=/i.test(raw)) return url;
+        const hashAt = raw.indexOf("#");
+        const base = hashAt >= 0 ? raw.slice(0, hashAt) : raw;
+        const hash = hashAt >= 0 ? raw.slice(hashAt) : "";
+        const tagged = `${base}${base.includes("?") ? "&" : "?"}utm_source=parts-finder&utm_medium=chat&utm_campaign=${UTM_CAMPAIGN}${hash}`;
+        return tagged.replace(/&/g, "&amp;");
+      }
+
       function renderInline(text) {
         let t = escapeHtml(text);
         // [label](url)
         t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-          (_m, label, url) => `<a href="${url}" target="_blank" rel="noopener">${label}</a>`);
+          (_m, label, url) => `<a href="${tagStoreLink(url)}" target="_blank" rel="noopener">${label}</a>`);
         // bare urls not already inside an anchor
         t = t.replace(/(^|[\s(])((https?:\/\/[^\s<)]+))/g,
-          (_m, pre, url) => `${pre}<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
+          (_m, pre, url) => `${pre}<a href="${tagStoreLink(url)}" target="_blank" rel="noopener">${url}</a>`);
         // **bold**
         t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
         return linkPartNumbers(t);
