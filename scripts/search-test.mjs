@@ -24,11 +24,21 @@ const CATALOG = [
   P("Nordyne 626602 Limit Switch", "626602"),
   P("Weil Mclain 382-200-750 Maintenance Kit, GV90+", "382-200-750"),
   P("Rheem SP20305A Water Heater Gas Valve GG40T06AVG01", "SP20305A"),
+  P("Vent-Rite 31 Convector and Riser Vent", "4941"),
+  P("Vent-Rite 33 Convector and Riser Vent", "4942"),
+  P("Vent-Rite 77 Main Vent", "4947"),
+  P("Vent-Rite 11 Radiator Vent", "4939"),
+  P("Vent-Rite 1 Radiator Vent", "4938"),
+  P("Maid-O-Mist 5 Radiator Vent", "5005"),
+  P("Schneider Electric TOOL-020-1 Globe Valve Packing Top Wrench", "T0201"),
+  P("York S1-02440901000 Blower Motor", "142729"),
+  P("York S1-02440902000 Gas Furnace Direct Drive Blower Motor", "142730"),
 ];
 const index = (p) => { const toks = new Set(); for (const f of [p.title, p.variants.nodes[0].sku, ...p.tags, p.description]) for (const w of String(f).toLowerCase().split(/\s+/)) { const c = w.replace(/^[^a-z0-9]+|[^a-z0-9+]+$/g, ""); if (!c) continue; toks.add(c.replace(/[^a-z0-9]/g, "")); for (const piece of c.split(/[^a-z0-9]+/)) if (piece) toks.add(piece); } return toks; };
 const IDX = CATALOG.map((p) => [p, index(p)]);
 const search = (q) => { const terms = String(q).toLowerCase().split(/\s+/).filter(Boolean); return IDX.filter(([, toks]) => terms.every((t) => { if (t.endsWith("*")) { const pre = t.slice(0, -1).replace(/[^a-z0-9]/g, ""); return [...toks].some((k) => k.startsWith(pre)); } return t.split(/[^a-z0-9]+/).filter(Boolean).every((piece) => toks.has(piece)); })).map(([p]) => p); };
-globalThis.fetch = async (url, init) => { const { query, variables } = JSON.parse(init.body); const nodes = search(variables.query); return { ok: true, json: async () => ({ data: query.includes("HelpPageSiteSearch") ? { search: { nodes } } : { products: { nodes } } }) }; };
+const siteSearch = (q) => { const hits = search(q); const words = String(q).toLowerCase().split(/\s+/).filter(Boolean).map((w) => w.replace(/[^a-z0-9]/g, "")); const fuzzy = IDX.filter(([p]) => !hits.includes(p) && words.some((w) => w.length >= 5 && p.title.toLowerCase().replace(/[^a-z0-9]+/g, "").includes(w))).map(([p]) => p); return [...hits, ...fuzzy]; };
+globalThis.fetch = async (url, init) => { const { query, variables } = JSON.parse(init.body); const nodes = query.includes("HelpPageSiteSearch") ? siteSearch(variables.query) : search(variables.query); return { ok: true, json: async () => ({ data: query.includes("HelpPageSiteSearch") ? { search: { nodes } } : { products: { nodes } } }) }; };
 process.env.SHOPIFY_STORE_DOMAIN = "fake.example"; process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN = "x"; process.env.PORT = "0";
 const mod = await import(tmp);
 const CASES = [
@@ -63,6 +73,19 @@ const CASES = [
   ["blower motor", "hvac", "blower motor"],
   ["Model: TB6575A1000", "hvac", "tb6575a1000"],
   ["0131F00041S and MOT18960", "hvac", "0131f00041s"],
+  // "No. 1" / "#1" is the model number 1; a name typed as one word matches the split title
+  ["ventrite no1", "hvac", "vent-rite 1 radiator"],
+  ["vent rite no. 1", "hvac", "vent-rite 1 radiator"],
+  ["Vent-Rite #1", "hvac", "vent-rite 1 radiator"],
+  ["do you have a ventrite number 1 radiator vent", "hvac", "vent-rite 1 radiator"],
+  ["vent rite 1", "hvac", "vent-rite 1 radiator"],
+  ["ventrite 11", "hvac", "vent-rite 11 radiator"],
+  ["maidomist no5", "hvac", "maid-o-mist 5"],
+  ["ventrite main vent", "hvac", "vent-rite 77"],
+  // a pasted link is searched as the words and part number in its path, not the site or page id
+  ["https://www.repairclinic.com/PartDetail/Blower-Motor/S1-02440901000/4962053", "hvac", "s1-02440901000"],
+  ["https://newenglandsupplyhouse.com/products/honeywell-commercial-tb6575a1000-fan-coil-thermostat?utm_source=chatgpt.com&variant=476", "hvac", "tb6575a1000"],
+  ["do you have this one www.repairclinic.com/PartDetail/Blower-Motor/S1-02440901000/4962053 ?", "hvac", "s1-02440901000"],
   // lamp finder unchanged
   ["SP-LAMP-024", "lamp", "sp-lamp-024"],
 ];

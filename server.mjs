@@ -1285,6 +1285,54 @@ function askedCodeGroups(userText, variants) {
 }
 const LAMP_FINDER_PAGE = "https://newenglandsupplyhouse.com/pages/projector-lamp-finder";
 
+// "No. 1", "No1", "#1", "number 40": the way heating parts are named on the box and in the
+// trade (Vent-Rite No. 1, Hoffman No. 40). Our titles carry the bare number ("Vent-Rite 1
+// Radiator Vent"). "ventrite no1" (2026-11-15) read "no1" as a part number, so the site
+// search's correct first result - the Vent-Rite 1, 279 in stock - was thrown out for not
+// naming "no1", and the finder said we don't carry it. Searched and ranked as the bare
+// number. Glued without a dot ("no1", "nr40a") only for a short model number, so a real
+// part code that starts with those letters is left alone.
+function readModelNumberWords(text) {
+  return String(text || "")
+    .replace(/(?<![a-z0-9])(?:no|nr|num)(\d{1,3}[a-z]{0,2})(?![a-z0-9])/gi, "$1")
+    .replace(/(?<![a-z0-9])(?:no|nr|num|nbr|number)(?:\.\s*|\s+)#?\s*(?=\d)/gi, "")
+    .replace(/(?<![a-z0-9])#\s*(?=\d)/g, "");
+}
+
+// A pasted link, searched as the words and part number in its path. The whole URL went to
+// Shopify as one string and matched nothing: a customer pasted RepairClinic's page for York
+// S1-02440901000 (2026-11-15, 7 in stock) and the finder said we don't carry it. The site name,
+// query string and the site's own page id ("/4962053") are dropped. In a slug the hyphens
+// split words ("blower-motor") but join a part number ("62-102635-81"), so neighbouring pieces
+// that contain digits are kept together.
+const PATH_FILLER = new Set(["products", "product", "collections", "collection", "partdetail", "part", "parts",
+  "dp", "p", "item", "items", "detail", "details", "catalog", "shop", "store", "pages", "search", "en", "us", "www"]);
+function slugWords(segment) {
+  const pieces = segment.split(/[-_+.]+/).filter(Boolean);
+  const out = [];
+  for (const piece of pieces) {
+    const prev = out[out.length - 1];
+    if (prev && /\d/.test(piece) && /\d/.test(prev)) out[out.length - 1] = `${prev}-${piece}`;
+    else out.push(piece);
+  }
+  return out.filter((w) => !PATH_FILLER.has(w.toLowerCase()));
+}
+function readPastedLinks(text) {
+  return String(text || "").replace(/\bhttps?:\/\/[^\s]+|\bwww\.[^\s]+/gi, (url) => {
+    const path = url.replace(/^https?:\/\//i, "").replace(/[?#].*$/, "").split("/").slice(1);
+    let segments = path.map((s) => { try { return decodeURIComponent(s); } catch { return s; } }).filter(Boolean);
+    const named = segments.filter((s) => !/^\d+$/.test(s)).flatMap(slugWords);
+    // A bare number in a link is the site's page id, unless nothing else in the link is a number.
+    if (named.some((w) => /\d/.test(w))) segments = segments.filter((s) => !/^\d+$/.test(s));
+    return ` ${segments.flatMap(slugWords).join(" ")} `;
+  }).replace(/\s+/g, " ").trim();
+}
+
+// What the finder searches and ranks on: pasted links read as words, "No. 1" read as 1.
+function searchableText(text) {
+  return readModelNumberWords(readPastedLinks(text));
+}
+
 const SEARCH_MAX_TERMS = 8;
 
 function buildShopifySearchQuery(userText) {
@@ -1420,6 +1468,9 @@ function buildShopifySearchCandidates(userText) {
   for (const keep of searchAttemptSizes(terms.length)) {
     const kept = new Set(ranked.slice(0, keep));
     const narrowed = terms.filter((term) => kept.has(term)).join(" ");
+    // A short number on its own ("1", "40") matches hundreds of unrelated listings. It is
+    // only ever the model INSIDE a family the customer named, so it never searches alone.
+    if (/^\d{1,3}$/.test(narrowed)) continue;
     if (narrowed && !candidates.includes(narrowed)) candidates.push(narrowed);
   }
 
@@ -1527,6 +1578,8 @@ function productQueryTokens(userText) {
     numbers: words.filter((w) => /^\d+$/.test(w)),
     codes: [...codes],
     words: words.filter((w) => /^[a-z]{3,}$/.test(w) && !SEARCH_STOPWORDS.has(w)),
+    // In order and with the short ones ("maid o mist"), for names typed in pieces.
+    allWords: words.filter((w) => !SEARCH_STOPWORDS.has(w)),
     product: productClauseWords(userText)
   };
 }
@@ -1624,12 +1677,34 @@ function containsCode(squished, code) {
   return false;
 }
 
+// A name written as one word or as several: "ventrite" for "Vent-Rite", "maidomist" for
+// "Maid-O-Mist", or "vent rite" for a title that says "Ventrite". Runs of 2-3 neighbouring
+// words, letters only, joined; five letters or more, so two short words never make a third.
+function joinedRuns(words) {
+  const out = new Set();
+  for (let i = 0; i < words.length; i += 1) {
+    if (!/^[a-z]+$/.test(words[i])) continue;
+    let joined = words[i];
+    for (let j = i + 1; j < Math.min(words.length, i + 3); j += 1) {
+      if (!/^[a-z]+$/.test(words[j])) break;
+      joined += words[j];
+      if (joined.length >= 5) out.add(joined);
+    }
+  }
+  return out;
+}
+
 function scoreProductForQuery(product, tokens) {
   const title = String(product.title || "").toLowerCase();
-  const titleTokens = new Set(title.split(/[^a-z0-9]+/).filter(Boolean));
+  const titleWords = title.split(/[^a-z0-9]+/).filter(Boolean);
+  const titleTokens = new Set(titleWords);
   const squishedTitle = title.replace(/[^a-z0-9]+/g, "");
 
-  const wordHits = tokens.words.filter((w) => titleTokens.has(w)).length;
+  // The customer's word as the title's words run together ("ventrite" = "Vent-Rite"), and the
+  // customer's words run together as one title word ("vent rite" = "Ventrite").
+  const titleJoined = joinedRuns(titleWords);
+  const wordHits = tokens.words.filter((w) => titleTokens.has(w) || titleJoined.has(w)).length
+    + [...joinedRuns(tokens.allWords || [])].filter((w) => titleTokens.has(w)).length;
   let score = wordHits * 3;
 
   // "thermocouple for my honeywell gas valve": the gas valves match three words, the
@@ -1764,7 +1839,9 @@ async function getShopifyProductContext(conversation, options = {}) {
     return null;
   }
 
-  const latestUserMessage = getLatestUserMessage(conversation);
+  const askedMessage = getLatestUserMessage(conversation);
+  // Searched and ranked with pasted links read as words and "No. 1" / "#1" as the number 1.
+  const latestUserMessage = searchableText(askedMessage);
   const searchCandidates = buildShopifySearchCandidates(latestUserMessage);
   const searchQuery = searchCandidates[0];
   if (!searchQuery) {
@@ -1950,7 +2027,7 @@ async function getShopifyProductContext(conversation, options = {}) {
     : "";
   const unnamedList = unnamedCodes.map((group) => `"${group.asked}"`).join(", ");
   if (!products.length) {
-    const why = [`Live Shopify product search for "${latestUserMessage}" returned no matches.`];
+    const why = [`Live Shopify product search for "${askedMessage}" returned no matches.`];
     if (unnamedCodes.length) {
       why.push(`No listing in our catalog names ${unnamedList} (checked with and without dashes, spaces, prefixes and revision letters). Say plainly that we do not list that number. Do not offer any other product as a match, a "closest match" or a replacement for it.`);
     }
@@ -1966,7 +2043,7 @@ async function getShopifyProductContext(conversation, options = {}) {
   }
 
   const lines = [
-    `Live Shopify product search results for "${latestUserMessage}" using query "${usedQuery}":`
+    `Live Shopify product search results for "${askedMessage}" using query "${usedQuery}":`
   ];
   if (products.some((product) => lampType(product))) lines.push(LAMP_TYPE_NOTE);
   for (const v of variantHits) {
