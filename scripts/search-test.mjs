@@ -91,7 +91,7 @@ const CASES = [
 ];
 let fail = 0;
 for (const [msg, tool, want, mustSay] of CASES) {
-  const ctx = await mod.__ctx([{ role: "user", content: msg }], { tool });
+  const ctx = await mod.__ctx([{ role: "user", content: msg }], { tool, readLinks: false });
   const titles = (ctx.text.match(/^- .*?(?= \|)/gm) || []).map((t) => t.slice(2));
   const ok = want === null ? titles.length === 0 : titles.length > 0 && titles[0].toLowerCase().includes(want) && (!mustSay || ctx.text.toLowerCase().includes(mustSay));
   if (!ok) fail += 1;
