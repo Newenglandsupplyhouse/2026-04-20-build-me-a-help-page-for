@@ -1863,7 +1863,98 @@ async function lampFilterContext(conversation, runSearch) {
   return lines.join("\n");
 }
 
+// Makers of the equipment itself (furnace, boiler, air handler, water heater) - the brand a
+// customer means by "my York". Longest names first so "American Standard" wins over a part.
+const EQUIPMENT_BRANDS = [
+  "American Standard", "Bradford White", "Weil-McLain", "Weil McLain", "Thermo Pride", "New Yorker",
+  "Comfortmaker", "Intertherm", "Williamson", "Lochinvar", "Mitsubishi", "Armstrong", "AO Smith",
+  "A.O. Smith", "Slant/Fin", "Tempstar", "Peerless", "Goodman", "Carrier", "Coleman", "Luxaire",
+  "Nordyne", "Burnham", "Buderus", "Dunkirk", "Fujitsu", "Rinnai", "Navien", "Ducane", "Lennox",
+  "Bryant", "Reznor", "Modine", "Daikin", "Miller", "Amana", "Payne", "Trane", "Rheem", "Utica",
+  "Crown", "Bosch", "Ruud", "York", "Heil"
+];
+// Makers of the parts. Not carried over as the equipment brand, but a message that names one
+// has already said which brand it wants.
+const COMPONENT_BRANDS = /\b(honeywell|resideo|white[- ]rodgers|emerson|taco|grundfos|bell\s*&\s*gossett|b&g|beckett|riello|carlin|field controls|fasco|genteq|us motors|century|packard|supco|icm|robertshaw|johnson controls|siemens|belimo|caleffi|watts|amtrol|mcdonnell|hydrolevel|tjernlund|wayne|suntec|webster|danfoss|sporlan|copeland|mars|dayton|lau|asco)\b/i;
+const brandPattern = (brand) => new RegExp(`\\b${brand.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&").replace(/[- ]/g, "[- ]?")}\\b`, "i");
+const EQUIPMENT_BRAND_PATTERNS = EQUIPMENT_BRANDS.map((brand) => [brand, brandPattern(brand)]);
+function equipmentBrandIn(text) {
+  const t = String(text || "");
+  return (EQUIPMENT_BRAND_PATTERNS.find(([, re]) => re.test(t)) || [null])[0];
+}
+// The brand of the customer's unit, from what was already said: their own messages first,
+// newest first; otherwise a reply that identified the unit ("York gas furnace - model ...",
+// which is how a photo of a rating plate is answered). A reply that only offered a
+// "Rheem control board" does not make the unit a Rheem.
+const EQUIPMENT_WORDS = "(?:gas |oil |electric )?(?:furnace|boiler|air handler|heat pump|condenser|water heater|unit heater|mini[- ]split|package unit|rooftop unit)";
+function conversationEquipmentBrand(conversation) {
+  const turns = [...conversation].reverse();
+  for (const turn of turns) {
+    if (turn?.role !== "user" || typeof turn.content !== "string") continue;
+    const brand = equipmentBrandIn(turn.content);
+    if (brand) return brand;
+  }
+  for (const turn of turns) {
+    if (turn?.role === "user" || typeof turn?.content !== "string") continue;
+    for (const [brand, re] of EQUIPMENT_BRAND_PATTERNS) {
+      if (new RegExp(`${re.source}\\s+${EQUIPMENT_WORDS}`, "i").test(turn.content)) return brand;
+    }
+  }
+  return null;
+}
+const titlesIn = (context) => (String(context?.text || "").match(/^- .*?(?= \|)/gm) || []).map((line) => line.slice(2));
+// The parts people ask for by unit model, with the title words that mark a listing as one.
+const MODEL_NUMBER_PART_TYPES = [
+  ["blower motor", /blower motor/i], ["inducer motor", /inducer|vent motor|draft/i], ["igniter", /ignit[eo]r/i],
+  ["control board", /control board|circuit board/i], ["gas valve", /gas valve/i],
+  ["flame sensor", /flame (sensor|rod)/i], ["pressure switch", /pressure switch/i]
+];
+
+// HVAC finder: what was said earlier in the chat counts. The search below reads only the
+// latest message, so "York furnace, model YP9C..." followed by "I need the igniter" searched
+// "igniter" alone, and a bare unit model number got "not listed" and the chat ended there.
 async function getShopifyProductContext(conversation, options = {}) {
+  const base = await searchProductContext(conversation, options);
+  if ((options.tool || "hvac") !== "hvac" || !base) return base;
+  try {
+    const latest = getLatestUserMessage(conversation);
+    const brand = conversationEquipmentBrand(conversation);
+    if (!brand) return base;
+    const terms = buildShopifySearchQuery(latest).split(" ").filter(Boolean);
+    if (terms.some((term) => term.includes(":"))) return base;
+    const hasCode = terms.some((term) => isPartCodeTerm(term));
+    const saysWhatKind = terms.some((term) => searchTermWeight(term) === 1) || productClauseWords(latest).length > 0;
+    const namesBrand = Boolean(equipmentBrandIn(latest)) || COMPONENT_BRANDS.test(latest);
+    const named = brandPattern(brand);
+
+    // "I need the igniter" after the unit was named: search that brand's igniters.
+    if (saysWhatKind && !hasCode && !namesBrand) {
+      const branded = await searchProductContext(conversation, { ...options, message: `${brand} ${latest}` });
+      if (!branded || !titlesIn(branded).some((title) => named.test(title))) return base;
+      const [first, ...rest] = branded.text.split("\n");
+      const note = `Note: the customer said earlier that their equipment is ${brand}, so ${brand} was added to this search. Lead with the ${brand} listings. Listings for other brands are not confirmed to fit a ${brand} unit - do not present them as the ${brand} part.`;
+      return { ...branded, text: [first, note, ...rest].join("\n") };
+    }
+
+    // A unit's model number and nothing else, and no listing names it: offer the kinds of
+    // part we do list for that brand, as tap-to-answer buttons, instead of a dead end.
+    if (hasCode && !saysWhatKind && !base.handles.length) {
+      const probes = await Promise.all(MODEL_NUMBER_PART_TYPES.map(async ([type, marks]) => {
+        const found = await searchProductContext(conversation, { ...options, message: `${brand} ${type}` }).catch(() => null);
+        return titlesIn(found).some((title) => named.test(title) && marks.test(title)) ? `${brand} ${type}` : null;
+      }));
+      const choices = probes.filter(Boolean).slice(0, 4);
+      if (choices.length < 2) return base;
+      const note = `Note: the customer's equipment is ${brand}, and the number they gave may be the model number of the unit rather than a part number. We list parts by part number, not by unit model. Say in one sentence that we do not list that number as a part, then ask which part of their ${brand} unit they need, and end the reply with exactly this line:\nOptions: ${choices.join(" | ")}\nDo not name or link any product in this reply, and do not offer to look the part up, source it or have someone contact them.`;
+      return { ...base, text: `${base.text}\n${note}` };
+    }
+  } catch {
+    // The carry-over is an extra; any failure leaves the ordinary search result as it was.
+  }
+  return base;
+}
+
+async function searchProductContext(conversation, options = {}) {
   const tool = options.tool || "hvac";
   const storeDomain = process.env.SHOPIFY_STORE_DOMAIN;
   const storefrontToken = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN;
@@ -1873,10 +1964,11 @@ async function getShopifyProductContext(conversation, options = {}) {
     return null;
   }
 
-  const askedMessage = getLatestUserMessage(conversation);
+  // options.message: a search the finder words itself (the unit's brand carried forward).
+  const askedMessage = options.message || getLatestUserMessage(conversation);
   // A link to another site: what part its page is for (link-reader.mjs). Nothing is fetched
   // when the message has no such link.
-  const linkedPages = options.readLinks === false ? [] : await readCustomerLinks(askedMessage, { apiKey: process.env.OPENAI_API_KEY });
+  const linkedPages = options.readLinks === false || options.message ? [] : await readCustomerLinks(askedMessage, { apiKey: process.env.OPENAI_API_KEY });
   // Searched and ranked with pasted links read as words and "No. 1" / "#1" as the number 1.
   const latestUserMessage = searchableText(askedMessage, linkedPages);
   const searchCandidates = buildShopifySearchCandidates(latestUserMessage);
@@ -2384,10 +2476,18 @@ const escapeHtmlServer = (s) => String(s ?? "")
 
 // Fill finder.html's __CFG_*__ tokens from the persisted config. `tool` is echoed
 // into the page so the client posts it back on every /api/chat call.
+const CANNED_EXAMPLE_NUMBER = /\bI have (an? )?(OEM )?part\b.*\d{2,}/i;
 function renderFinderPage(template, cfg, tool = "hvac") {
   const chipsHtml = (Array.isArray(cfg.chips) ? cfg.chips : [])
     .filter((c) => c && c.label && c.q)
-    .map((c) => `<button type="button" data-q="${escapeHtmlServer(c.q)}">${escapeHtmlServer(c.label)}<span>${escapeHtmlServer(c.sub || "")}</span></button>`)
+    // A chip whose question carries a made-up example part number ("I have OEM part
+    // 62-102635-81") used to send that number as if it were the customer's: 58 chats in 90
+    // days opened on a Rheem board nobody asked about. Such a chip, and any chip marked
+    // "type": true, now puts the cursor in the box and asks for the customer's own number.
+    // Checked here, not only in the defaults, because the chips saved in /admin win.
+    .map((c) => (c.type === true || CANNED_EXAMPLE_NUMBER.test(c.q)
+      ? `<button type="button" data-type="${escapeHtmlServer(c.prompt || "Type the part number from your old part, e.g. the number on its label")}">${escapeHtmlServer(c.label)}<span>${escapeHtmlServer(c.sub || "")}</span></button>`
+      : `<button type="button" data-q="${escapeHtmlServer(c.q)}">${escapeHtmlServer(c.label)}<span>${escapeHtmlServer(c.sub || "")}</span></button>`))
     .join("\n        ");
   return template
     .replace("__CFG_HEADING__", escapeHtmlServer(cfg.welcomeHeading))
