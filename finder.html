@@ -841,6 +841,12 @@
       }
 
       inputEl.focus();
+
+      // ?q=… is a question typed into the Parts Finder search box on the store's home page.
+      // The storefront page passes it along once; ask it straight away so the customer
+      // does not have to type it a second time. "Start over" reloads without it.
+      const startQuestion = (new URLSearchParams(location.search).get("q") || "").trim().slice(0, 300);
+      if (startQuestion) send(startQuestion);
     })();
   </script>
 </body>
