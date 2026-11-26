@@ -2,7 +2,7 @@
 // real-time note, and the cases that must never claim a number. Run from scripts/:
 // node stock-check-test.mjs
 import assert from "node:assert/strict";
-import { stockCheckMessage, stockCheckSummary, unitsAvailable, REAL_TIME_NOTE } from "../stock-check.mjs";
+import { stockCheckMessage, stockCheckSummary, unitsAvailable, REAL_TIME_NOTE, PICKUP_LINE } from "../stock-check.mjs";
 
 let n = 0;
 const ok = (name) => { n += 1; console.log(`ok ${n} - ${name}`); };
@@ -18,9 +18,10 @@ const row = (over = {}) => ({
   const msg = stockCheckMessage([row()]);
   assert.ok(msg.startsWith("✅ **In stock — 49 available right now.**"), msg);
   assert.ok(msg.includes("(10:42 AM ET)"), msg);
-  assert.ok(msg.endsWith(REAL_TIME_NOTE), msg);
+  assert.ok(msg.includes(REAL_TIME_NOTE), msg);
+  assert.ok(msg.endsWith(`${REAL_TIME_NOTE}\n\n${PICKUP_LINE}`), msg);
   assert.ok(!/metropac|jasper|jtx/i.test(msg), "supplier name leaked");
-  ok("single item shows the live count and the real-time note");
+  ok("single item shows the live count, the real-time note, then the order-first pickup line");
 }
 
 // 2. Exactly one left still reads as a count, and big counts get a thousands separator.
@@ -45,7 +46,8 @@ const row = (over = {}) => ({
   assert.ok(msg.startsWith("✅ **In stock — confirmed.**"), msg);
   assert.ok(!/\d+ available/.test(msg), "invented a count");
   assert.ok(msg.endsWith(REAL_TIME_NOTE), msg);
-  ok("no count without a reading of one");
+  assert.ok(!msg.includes(PICKUP_LINE), "a lamp ships from the supplier; no pickup line");
+  ok("no count without a reading of one, and no pickup line on a lamp");
 }
 
 // 5. Out of stock: no count, the note (so they know calling gets the same answer), then contact.
@@ -55,7 +57,8 @@ const row = (over = {}) => ({
   assert.ok(msg.includes(REAL_TIME_NOTE), msg);
   assert.ok(msg.indexOf(REAL_TIME_NOTE) < msg.indexOf("[contact us]"), "note comes before the contact line");
   assert.ok(!/\d+ available/.test(msg));
-  ok("out of stock carries the note, never a count");
+  assert.ok(!msg.includes(PICKUP_LINE), "nothing to pick up");
+  ok("out of stock carries the note, never a count or a pickup line");
 }
 
 // 6. Not enough on hand for a pack reads as out of stock from the service; we never show the partial count.
@@ -88,7 +91,9 @@ const row = (over = {}) => ({
   assert.ok(msg.includes("- [Something Out](https://newenglandsupplyhouse.com/products/x): ⚠️ **Not in stock right now**"), msg);
   assert.equal(msg.split(REAL_TIME_NOTE).length, 2, "note exactly once");
   assert.ok(msg.includes("[contact us]"), msg);
-  ok("multi-item list with counts, one note, contact line");
+  assert.ok(msg.endsWith(`\n\n${PICKUP_LINE}`), msg);
+  assert.equal(msg.split(PICKUP_LINE).length, 2, "pickup line exactly once");
+  ok("multi-item list with counts, one note, contact line, pickup line last");
 }
 
 // 9. Three items all in, one of them a lamp: "confirmed" for the lamp, "available for your order" tail.
@@ -96,8 +101,20 @@ const row = (over = {}) => ({
   const rows = [row(), row({ sku: "ELPLP97-A", title: "Epson ELPLP97 Lamp", onHand: null, supplier: "jtx" })];
   const msg = stockCheckMessage(rows);
   assert.ok(msg.includes("Epson ELPLP97 Lamp](https://newenglandsupplyhouse.com/products/amtrol-700-30-air-vent): ✅ **In stock — confirmed**"), msg);
+  assert.ok(msg.endsWith(`${REAL_TIME_NOTE} They're available for your order.\n\n${PICKUP_LINE}`), msg);
+  ok("all in stock, lamp without a count, pickup line for the HVAC item");
+}
+
+// 9b. Lamps only: confirmed, noted, but no pickup line (they ship from the supplier).
+{
+  const rows = [
+    row({ sku: "ELPLP97-A", title: "Epson ELPLP97 Lamp", onHand: null, supplier: "jtx" }),
+    row({ sku: "ELPLP96", title: "Epson ELPLP96 Lamp", onHand: null, supplier: "jtx" })
+  ];
+  const msg = stockCheckMessage(rows);
   assert.ok(msg.endsWith(`${REAL_TIME_NOTE} They're available for your order.`), msg);
-  ok("all in stock, lamp without a count");
+  assert.ok(!msg.includes(PICKUP_LINE), msg);
+  ok("lamps only: no pickup line");
 }
 
 // 10. All unknown: no note at all.
@@ -105,6 +122,7 @@ const row = (over = {}) => ({
   const rows = [row({ state: "unknown", onHand: null }), row({ sku: "2", state: "unknown", onHand: null })];
   const msg = stockCheckMessage(rows);
   assert.ok(!msg.includes(REAL_TIME_NOTE), msg);
+  assert.ok(!msg.includes(PICKUP_LINE), msg);
   ok("nothing read, nothing noted");
 }
 
