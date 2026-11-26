@@ -2,7 +2,10 @@
 // real-time note, and the cases that must never claim a number. Run from scripts/:
 // node stock-check-test.mjs
 import assert from "node:assert/strict";
-import { stockCheckMessage, stockCheckSummary, unitsAvailable, REAL_TIME_NOTE, PICKUP_LINE, ALERT_ASK } from "../stock-check.mjs";
+import {
+  stockCheckMessage, stockCheckSummary, unitsAvailable, productHandlesIn, offerItemsFrom, stockCheckRejection,
+  REAL_TIME_NOTE, PICKUP_LINE, ALERT_ASK
+} from "../stock-check.mjs";
 
 // No reply may offer a call or a contact page (Jason, 2026-11-26). The real-time note
 // itself says "if you called us", so it is taken out before looking.
@@ -156,6 +159,44 @@ const row = (over = {}) => ({
   assert.ok(line.includes("91=in_stock(49/10) metropac"), line);
   assert.ok(line.includes("119=in_stock(3) metropac"), line);
   ok("summary line shows raw count and pack size");
+}
+
+// 12. A reply is read for up to ten product links, in order, without repeats.
+{
+  const reply = Array.from({ length: 12 }, (_, i) => `- Item ${i}: https://newenglandsupplyhouse.com/products/item-${i}`).join("\n")
+    + "\nAgain: https://newenglandsupplyhouse.com/products/item-0";
+  const handles = productHandlesIn(reply);
+  assert.equal(handles.length, 10);
+  assert.equal(handles[0], "item-0");
+  assert.equal(handles[9], "item-9");
+  ok("a reply is read for up to ten product links");
+}
+
+// 13. The offer filters first and caps second: a listing with no live read costs no slot.
+{
+  const live = (i) => ({ handle: `live-${i}`, title: `Live ${i}`, live: true, forSale: true, sku: `L${i}` });
+  const products = [
+    { handle: "other-source", title: "Other Source Valve", live: false, forSale: true, sku: "X1" },
+    live(1), live(2),
+    { handle: "sold-out", title: "Sold Out", live: true, forSale: false, sku: "S1" },
+    live(3), live(4), live(5), live(6)
+  ];
+  const items = offerItemsFrom(products);
+  assert.deepEqual(items.map((i) => i.handle), ["live-1", "live-2", "live-3", "live-4", "live-5"]);
+  assert.deepEqual(items[0], { handle: "live-1", title: "Live 1" });
+  assert.equal(offerItemsFrom([products[0], products[3]]).length, 0);
+  ok("offer = live-readable and for sale first, then capped at five");
+}
+
+// 14. The day's cap counts items read, not taps; the cap message offers no contact.
+{
+  const env = { STOCK_CHECK_PER_MIN: "50", STOCK_CHECK_DAILY_CAP: "7" };
+  assert.equal(stockCheckRejection("ip-a", 5, env), null);
+  assert.equal(stockCheckRejection("ip-b", 2, env), null);
+  const rejected = stockCheckRejection("ip-c", 1, env) || "";
+  assert.match(rejected, /paused for today/);
+  assert.ok(!/contact|\bcall\b/i.test(rejected), rejected);
+  ok("daily cap counts items; the cap message offers no contact");
 }
 
 console.log(`\n${n} checks passed`);
