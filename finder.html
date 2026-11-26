@@ -273,6 +273,9 @@
       /** conversation history sent to the engine on every turn */
       let conversation = [];
       let busy = false;
+      // Parts a stock check read as out of stock this chat: no more button for them, a
+      // second tap would only repeat the answer. A failed read is not added, so it can be retried.
+      const outOfStockHandles = new Set();
       /** photos staged for the next message (downscaled JPEG data URLs, max 3) */
       let pendingImages = [];
       const attachBtn = document.getElementById("attach");
@@ -461,7 +464,8 @@
       // The server offers this under a reply that links in-stock products. Nothing is
       // checked until the customer taps it; the answer is written by the server.
       function offerStockCheck(bubble, offer) {
-        const items = (offer && Array.isArray(offer.items) ? offer.items : []).filter((i) => i && i.handle);
+        const items = (offer && Array.isArray(offer.items) ? offer.items : [])
+          .filter((i) => i && i.handle && !outOfStockHandles.has(i.handle));
         if (!items.length || !bubble) return;
         const col = bubble.closest(".col");
         if (!col) return;
@@ -541,6 +545,7 @@
             return;
           }
           wrap.remove();
+          for (const h of (Array.isArray(data.outOfStock) ? data.outOfStock : [])) outOfStockHandles.add(String(h));
           addMessage("assistant", renderMarkdown(data.reply));
           conversation.push({ role: "assistant", content: data.reply });
         } catch (err) {

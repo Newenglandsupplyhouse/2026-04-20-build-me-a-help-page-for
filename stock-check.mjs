@@ -88,6 +88,35 @@ async function lookupProducts(handles, env = process.env, limit = MAX_ITEMS) {
   });
 }
 
+// Products this chat already read as out of stock, from the answer lines this module
+// wrote earlier in the conversation ("… it is **not in stock right now**" with the product
+// link, or "- [Title](url): ⚠️ **Not in stock right now**"). The button is not offered for
+// them again (a second tap would only repeat the answer) and the model is told not to
+// point at it for them. handle -> title. A failed read is not an out-of-stock read.
+const OUT_LINE = /not in stock right now/i;
+const LINKED_PRODUCT = /\[([^\]]+)\]\((?:https?:\/\/[^)\s]*?)?\/(?:collections\/[^/\s)]+\/)?products\/([a-z0-9][a-z0-9-]*)[^)]*\)/gi;
+export function outOfStockReadIn(conversation) {
+  const seen = new Map();
+  for (const m of Array.isArray(conversation) ? conversation : []) {
+    if (!m || m.role !== "assistant" || !m.content) continue;
+    for (const line of String(m.content).split("\n")) {
+      if (!OUT_LINE.test(line)) continue;
+      for (const match of line.matchAll(LINKED_PRODUCT)) seen.set(match[2].toLowerCase(), match[1]);
+    }
+  }
+  return seen;
+}
+
+// The model's note on a stock question, with the parts already read as out of stock this
+// chat called out, so it never sends the customer to a button that is not there.
+export function stockNoteFor(conversation) {
+  const out = [...outOfStockReadIn(conversation).values()];
+  if (!out.length) return STOCK_BUTTON_NOTE;
+  return STOCK_BUTTON_NOTE
+    + ` Exception: a live check in this chat already read ${out.map((t) => `"${t}"`).join(", ")} as not in stock, and the button is not shown again for ${out.length === 1 ? "it" : "them"}.`
+    + " For that item say plainly it is not in stock right now, that replying with an email address gets one back-in-stock email, and nothing about tapping the button.";
+}
+
 // The items a tap may check: listings we sell right now whose supplier stock can be read
 // live, and only then the cap — so a listing with no live read never costs a slot.
 export function offerItemsFrom(products) {
@@ -107,7 +136,8 @@ export async function stockCheckOffer(conversation, reply, latestUserMessage, en
     handles = productHandlesIn(previous?.content || "");
   }
   if (!handles.length) return null;
-  const items = offerItemsFrom(await lookupProducts(handles, env, SCAN_LIMIT));
+  const alreadyOut = outOfStockReadIn(conversation);
+  const items = offerItemsFrom((await lookupProducts(handles, env, SCAN_LIMIT)).filter((p) => !alreadyOut.has(p.handle)));
   return items.length ? { items } : null;
 }
 
@@ -276,7 +306,14 @@ export async function runStockCheck(handles, env = process.env) {
     };
   });
 
-  return { reply: stockCheckMessage(rows), rows };
+  return { reply: stockCheckMessage(rows), rows, outOfStock: outOfStockHandles(rows) };
+}
+
+// Handles a check read as out of stock. The page stops offering the button for these for
+// the rest of the chat (Jason, 2026-11-26): tapping again would only repeat the answer. A
+// read that could not be made is not in here, so the customer can try that one again.
+export function outOfStockHandles(rows) {
+  return rows.filter((r) => r.state === "out_of_stock" && r.handle).map((r) => r.handle);
 }
 
 // For the CRM log line (internal only): what each reading actually said.

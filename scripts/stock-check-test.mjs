@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import {
   stockCheckMessage, stockCheckSummary, unitsAvailable, productHandlesIn, offerItemsFrom, stockCheckRejection,
-  REAL_TIME_NOTE, PICKUP_LINE, ALERT_ASK
+  outOfStockHandles, outOfStockReadIn, stockNoteFor, STOCK_BUTTON_NOTE, REAL_TIME_NOTE, PICKUP_LINE, ALERT_ASK
 } from "../stock-check.mjs";
 
 // No reply may offer a call or a contact page (Jason, 2026-11-26). The real-time note
@@ -197,6 +197,53 @@ const row = (over = {}) => ({
   assert.match(rejected, /paused for today/);
   assert.ok(!/contact|\bcall\b/i.test(rejected), rejected);
   ok("daily cap counts items; the cap message offers no contact");
+}
+
+// 15. Only parts read as out of stock are handed to the page to hide; a failed read is not.
+{
+  const rows = [
+    row(),
+    row({ handle: "out-one", sku: "1", state: "out_of_stock", onHand: 0 }),
+    row({ handle: "unknown-two", sku: "2", state: "unknown", onHand: null, reason: "busy" }),
+    row({ handle: "out-three", sku: "3", state: "out_of_stock", onHand: 0 })
+  ];
+  assert.deepEqual(outOfStockHandles(rows), ["out-one", "out-three"]);
+  assert.deepEqual(outOfStockHandles([row()]), []);
+  ok("out-of-stock handles for the page: out reads only, never a failed read");
+}
+
+// 16. The chat's own earlier answers say which parts were read as out of stock.
+{
+  const single = stockCheckMessage([row({ state: "out_of_stock", onHand: 0 })]);
+  const list = stockCheckMessage([
+    row({ handle: "in-one", sku: "1", title: "In One" }),
+    row({ handle: "out-two", sku: "2", title: "Out Two", state: "out_of_stock", onHand: 0 }),
+    row({ handle: "unknown-three", sku: "3", title: "Unknown Three", state: "unknown", onHand: null, reason: "busy" })
+  ]);
+  const modelReply = "Status: Not in stock right now (you are signed up).\nProduct page: https://newenglandsupplyhouse.com/products/in-one";
+  const conversation = [
+    { role: "user", content: "amtrol vent" },
+    { role: "assistant", content: single },
+    { role: "user", content: "Check real-time stock" },
+    { role: "assistant", content: list },
+    { role: "assistant", content: modelReply }
+  ];
+  const read = outOfStockReadIn(conversation);
+  assert.deepEqual([...read.keys()], ["amtrol-700-30-air-vent", "out-two"]);
+  assert.equal(read.get("out-two"), "Out Two");
+  assert.equal(outOfStockReadIn([{ role: "assistant", content: stockCheckMessage([row()]) }]).size, 0, "an in-stock read hides nothing");
+  assert.equal(outOfStockReadIn([{ role: "user", content: single }]).size, 0, "only the assistant's own answers count");
+  ok("out-of-stock reads are recovered from the chat's own answers; in-stock and failed reads are not");
+}
+
+// 17. The model's stock note names the parts already read as out, and says not to point at the button.
+{
+  assert.equal(stockNoteFor([]), STOCK_BUTTON_NOTE);
+  const note = stockNoteFor([{ role: "assistant", content: stockCheckMessage([row({ state: "out_of_stock", onHand: 0 })]) }]);
+  assert.ok(note.startsWith(STOCK_BUTTON_NOTE), note);
+  assert.ok(note.includes('"Amtrol 700-30 Air Vent" as not in stock'), note);
+  assert.ok(/nothing about tapping the button/.test(note), note);
+  ok("stock note carries the exception for parts already read as out");
 }
 
 console.log(`\n${n} checks passed`);

@@ -8,7 +8,7 @@ import {
   CONFIG_FIELDS, configVersion, listHistory, getHistory, restoreVersion, ensureBaseline
 } from "./finder-config.mjs";
 import {
-  isStockAsk, STOCK_BUTTON_NOTE, stockCheckOffer, stockCheckRejection, runStockCheck, stockCheckSummary
+  isStockAsk, stockNoteFor, stockCheckOffer, stockCheckRejection, runStockCheck, stockCheckSummary
 } from "./stock-check.mjs";
 import {
   isPhotoAsk, PHOTO_BUTTON_NOTE, photoOffer, photoRequestRejection, startPhotoRequest, photoRequestStatus,
@@ -2386,7 +2386,9 @@ async function createOpenAIResponse(conversation, cfg = null, options = {}) {
   // A stock question: point the customer at the live-check button instead of letting the
   // model imply it checked anything. Only on these turns, so every other answer is unchanged.
   if (isStockAsk(getLatestUserMessage(conversation))) {
-    input.unshift({ role: "system", content: [{ type: "input_text", text: STOCK_BUTTON_NOTE }] });
+    // Names any part this chat already read as out of stock: no button is offered again
+    // for it, so the model must not send the customer to one.
+    input.unshift({ role: "system", content: [{ type: "input_text", text: stockNoteFor(conversation) }] });
   }
   // A request to see a part: point at the "Show product photos" button (HVAC finder only; see photo-request.mjs).
   // Not when the customer is the one sending a photo ("here's a picture of the part").
@@ -3190,8 +3192,9 @@ const server = createServer(async (request, response) => {
         return;
       }
 
-      const { reply, rows } = await runStockCheck(handles);
-      sendJson(response, 200, { reply }, origin);
+      const { reply, rows, outOfStock } = await runStockCheck(handles);
+      // outOfStock: the page stops offering the button for these parts this chat.
+      sendJson(response, 200, { reply, outOfStock }, origin);
 
       if (!String(parsed.sessionId || "").startsWith("TEST-")) {
         const asked = [{ role: "user", content: `[Real-time stock check] ${rows.map((r) => r.title).join(" | ") || handles.join(" | ")}` }];
