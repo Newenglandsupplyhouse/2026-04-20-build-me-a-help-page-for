@@ -143,37 +143,61 @@ function etTime(iso) {
 }
 
 const link = (p) => `[${String(p.title).replace(/[[\]]/g, "")}](${p.url})`;
+const count = (n) => n.toLocaleString("en-US");
+
+// Shown with every real reading so a customer about to drive over for a pickup knows a
+// phone call would get the same answer. Never shown on a reading we could not get.
+export const REAL_TIME_NOTE = "This is real-time inventory — the same information you'd get if you called us.";
+
+// How many of a listing the supplier can fill right now. onHand is in supplier units; a
+// pack listing takes perUnit of them for each one we sell. A lamp read has no count (the
+// supplier only says in or out), so this is null and the answer says "confirmed".
+export function unitsAvailable(row) {
+  if (row.state !== "in_stock" || typeof row.onHand !== "number" || !Number.isFinite(row.onHand)) return null;
+  const perUnit = Number(row.perUnit) > 1 ? Math.floor(Number(row.perUnit)) : 1;
+  const units = Math.floor(row.onHand / perUnit);
+  return units >= 1 ? units : null;
+}
 
 // The customer-facing answer. Written here, never by the model, so it can only say what
 // the reading said. Anything short of a positive reading of the right item is "couldn't
-// confirm", never "in stock".
+// confirm", never "in stock". A positive reading with a count says the count.
 export function stockCheckMessage(rows) {
   const stamp = etTime(rows.map((r) => r.checkedAt).filter(Boolean).sort()[0]);
   const contact = `[contact us](${CONTACT_URL})`;
+  const wasRead = (row) => row.state === "in_stock" || row.state === "out_of_stock";
 
   if (rows.length === 1) {
     const [row] = rows;
+    const units = unitsAvailable(row);
+    if (row.state === "in_stock" && units != null) {
+      return `✅ **In stock — ${count(units)} available right now.** I just checked ${link(row)} against our warehouse inventory control system (${stamp}). ${REAL_TIME_NOTE}`;
+    }
     if (row.state === "in_stock") {
-      return `✅ **In stock — confirmed.** I just checked ${link(row)} against our warehouse inventory control system (${stamp}), and it's available for your order.`;
+      return `✅ **In stock — confirmed.** I just checked ${link(row)} against our warehouse inventory control system (${stamp}), and it's available for your order. ${REAL_TIME_NOTE}`;
     }
     if (row.state === "out_of_stock") {
-      return `⚠️ I just checked ${link(row)} against our warehouse inventory control system (${stamp}), and it is **not in stock right now**. Please ${contact} and we'll get you a lead time or a matching part before you order.`;
+      return `⚠️ I just checked ${link(row)} against our warehouse inventory control system (${stamp}), and it is **not in stock right now**. ${REAL_TIME_NOTE} Please ${contact} and we'll get you a lead time or a matching part before you order.`;
     }
     return `I couldn't get a live confirmation for ${link(row)} from our warehouse inventory control system just now. Please tap the button again in a minute, or ${contact} and we'll confirm it for you.`;
   }
 
   const lines = rows.map((row) => {
-    if (row.state === "in_stock") return `- ${link(row)}: ✅ **In stock — confirmed**`;
+    const units = unitsAvailable(row);
+    if (row.state === "in_stock") {
+      return `- ${link(row)}: ✅ **In stock — ${units != null ? `${count(units)} available right now` : "confirmed"}**`;
+    }
     if (row.state === "out_of_stock") return `- ${link(row)}: ⚠️ **Not in stock right now**`;
     return `- ${link(row)}: couldn't get a live confirmation — please try again in a minute`;
   });
   const allIn = rows.every((row) => row.state === "in_stock");
+  const tail = allIn
+    ? "They're available for your order."
+    : `For anything not confirmed, please ${contact} and we'll get you a lead time or confirm it for you.`;
   return [
     `I checked our warehouse inventory control system just now (${stamp}):`,
     lines.join("\n"),
-    allIn
-      ? "They're available for your order."
-      : `For anything not confirmed, please ${contact} and we'll get you a lead time or confirm it for you.`
+    rows.some(wasRead) ? `${REAL_TIME_NOTE} ${tail}` : tail
   ].join("\n\n");
 }
 
@@ -203,7 +227,16 @@ export async function runStockCheck(handles, env = process.env) {
     if (!p.live || !p.sku) return { ...p, state: "unknown", reason: "no_live_source" };
     const reading = readings.find((r) => String(r.sku || "").toUpperCase() === p.sku.toUpperCase()) || {};
     const state = ["in_stock", "out_of_stock"].includes(reading.state) ? reading.state : "unknown";
-    return { ...p, state, onHand: reading.onHand ?? null, supplier: reading.supplier || null, reason: reading.reason || null, checkedAt: reading.checkedAt || null, cached: !!reading.cached };
+    // We ask for quantity 1, so the service's "need" is the supplier units behind one of ours.
+    const perUnit = Number(reading.need) >= 1 ? Number(reading.need) : 1;
+    return {
+      ...p, state, perUnit,
+      onHand: typeof reading.onHand === "number" ? reading.onHand : null,
+      supplier: reading.supplier || null,
+      reason: reading.reason || null,
+      checkedAt: reading.checkedAt || null,
+      cached: !!reading.cached
+    };
   });
 
   return { reply: stockCheckMessage(rows), rows };
@@ -212,6 +245,6 @@ export async function runStockCheck(handles, env = process.env) {
 // For the CRM log line (internal only): what each reading actually said.
 export function stockCheckSummary(rows) {
   return "stock-check " + rows.map((r) =>
-    `${r.sku || r.handle}=${r.state}${r.onHand != null ? `(${r.onHand})` : ""}${r.supplier ? ` ${r.supplier}` : ""}${r.reason ? ` [${r.reason}]` : ""}${r.cached ? " cached" : ""}`
+    `${r.sku || r.handle}=${r.state}${r.onHand != null ? `(${r.onHand}${r.perUnit > 1 ? `/${r.perUnit}` : ""})` : ""}${r.supplier ? ` ${r.supplier}` : ""}${r.reason ? ` [${r.reason}]` : ""}${r.cached ? " cached" : ""}`
   ).join(", ");
 }
