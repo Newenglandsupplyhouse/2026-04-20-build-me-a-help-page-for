@@ -3176,16 +3176,17 @@ const server = createServer(async (request, response) => {
     try {
       const ip = (request.headers["x-forwarded-for"] || "").split(",")[0].trim()
         || request.socket.remoteAddress || "unknown";
-      const rejection = stockCheckRejection(ip);
-      if (rejection) {
-        sendJson(response, 429, { error: rejection }, origin);
-        return;
-      }
-
+      // Up to five items per tap (the cart service's own per-call limit). The day's cap
+      // counts items read, so the body is read before the limit is applied.
       const parsed = await readJsonBody(request, 10 * 1024);
-      const handles = Array.isArray(parsed.handles) ? parsed.handles.slice(0, 3) : [];
+      const handles = Array.isArray(parsed.handles) ? parsed.handles.slice(0, 5) : [];
       if (!handles.length) {
         sendJson(response, 400, { error: "Nothing to check." }, origin);
+        return;
+      }
+      const rejection = stockCheckRejection(ip, handles.length);
+      if (rejection) {
+        sendJson(response, 429, { error: rejection }, origin);
         return;
       }
 

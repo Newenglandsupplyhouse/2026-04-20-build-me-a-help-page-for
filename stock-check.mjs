@@ -10,7 +10,12 @@
 // Products whose stock the cart service can read live (Shopify vendor field). The
 // vendor stays server-side: it is never put in a reply, the model's context or the page.
 const LIVE_STOCK_VENDORS = new Set(["METROPAC", "JTX", "PLI"]);
-const MAX_ITEMS = 3;
+// Per tap: the most the cart service reads in one call. SCAN_LIMIT is how many product
+// links a reply is read for before the ones with no live read are dropped, so a listing
+// from another source never uses up a slot (Jason, 2026-11-26: a reply listed six valves
+// and the button covered two of them).
+const MAX_ITEMS = 5;
+const SCAN_LIMIT = 10;
 // No contact or call-us line in any stock answer (Jason, 2026-11-26): an out-of-stock
 // reading asks for an email for a back-in-stock alert instead.
 
@@ -26,13 +31,13 @@ export function isStockAsk(text) {
   return STOCK_ASK.test(String(text || ""));
 }
 
-export function productHandlesIn(text) {
+export function productHandlesIn(text, limit = SCAN_LIMIT) {
   const handles = [];
   for (const match of String(text || "").matchAll(PRODUCT_LINK)) {
     const handle = match[1].toLowerCase();
     if (!handles.includes(handle)) handles.push(handle);
   }
-  return handles.slice(0, MAX_ITEMS);
+  return handles.slice(0, limit);
 }
 
 // Told to the model only on a turn where the customer asked about stock, so a typed
@@ -43,12 +48,12 @@ export const STOCK_BUTTON_NOTE =
   "and tell them they can tap \"Check real-time stock\" under your reply for a live confirmation before they order. " +
   "Never say you checked live stock yourself, and never name a supplier, distributor or vendor.";
 
-// One Storefront round-trip for up to three handles.
-async function lookupProducts(handles, env = process.env) {
+// One Storefront round-trip for up to `limit` handles.
+async function lookupProducts(handles, env = process.env, limit = MAX_ITEMS) {
   const storeDomain = env.SHOPIFY_STORE_DOMAIN;
   const token = env.SHOPIFY_STOREFRONT_ACCESS_TOKEN;
   const apiVersion = env.SHOPIFY_API_VERSION || "2026-01";
-  const wanted = handles.filter((h) => HANDLE.test(h)).slice(0, MAX_ITEMS);
+  const wanted = handles.filter((h) => HANDLE.test(h)).slice(0, limit);
   if (!storeDomain || !token || !wanted.length) return [];
 
   const fields = `handle title vendor availableForSale onlineStoreUrl
@@ -83,6 +88,15 @@ async function lookupProducts(handles, env = process.env) {
   });
 }
 
+// The items a tap may check: listings we sell right now whose supplier stock can be read
+// live, and only then the cap — so a listing with no live read never costs a slot.
+export function offerItemsFrom(products) {
+  return (products || [])
+    .filter((p) => p && p.live && p.forSale && p.sku)
+    .slice(0, MAX_ITEMS)
+    .map((p) => ({ handle: p.handle, title: p.title }));
+}
+
 // Which products a reply should offer the button for: the ones it links, or — when the
 // customer asked about stock and this reply linked nothing — the ones the previous reply
 // linked. Only listings we sell right now and whose supplier stock can be read live.
@@ -93,16 +107,17 @@ export async function stockCheckOffer(conversation, reply, latestUserMessage, en
     handles = productHandlesIn(previous?.content || "");
   }
   if (!handles.length) return null;
-  const products = (await lookupProducts(handles, env)).filter((p) => p.live && p.forSale && p.sku);
-  if (!products.length) return null;
-  return { items: products.map((p) => ({ handle: p.handle, title: p.title })) };
+  const items = offerItemsFrom(await lookupProducts(handles, env, SCAN_LIMIT));
+  return items.length ? { items } : null;
 }
 
 // ---- limits: separate from the chat's, since one tap reads a supplier's site ----
 const ipTaps = new Map(); // ip -> [timestamps]
 let day = { key: "", count: 0 };
 
-export function stockCheckRejection(ip, env = process.env) {
+// The day's cap counts items read, not taps, so it stays under the cart service's own
+// daily read budget however many items a tap picks.
+export function stockCheckRejection(ip, items = 1, env = process.env) {
   const perMinute = Number(env.STOCK_CHECK_PER_MIN) || 5;
   const dailyCap = env.STOCK_CHECK_DAILY_CAP !== undefined && env.STOCK_CHECK_DAILY_CAP !== ""
     ? Number(env.STOCK_CHECK_DAILY_CAP)
@@ -110,13 +125,14 @@ export function stockCheckRejection(ip, env = process.env) {
   const now = Date.now();
   const today = new Date(now).toISOString().slice(0, 10);
   if (day.key !== today) day = { key: today, count: 0 };
-  if (day.count >= dailyCap) return "Live stock checks are paused for today. Please try again tomorrow.";
+  const reads = Math.max(1, Math.min(MAX_ITEMS, Number(items) || 1));
+  if (day.count + reads > dailyCap) return "Live stock checks are paused for today. Please try again tomorrow.";
   const taps = (ipTaps.get(ip) || []).filter((t) => now - t < 60_000);
   if (taps.length >= perMinute) return "That's a lot of stock checks in a row — please wait a moment and try again.";
   taps.push(now);
   ipTaps.set(ip, taps);
   if (ipTaps.size > 5000) ipTaps.clear();
-  day.count += 1;
+  day.count += reads;
   return null;
 }
 
