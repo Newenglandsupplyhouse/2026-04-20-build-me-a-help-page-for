@@ -15,6 +15,8 @@ import {
   workerAuthorized, claimPhotoJob, finishPhotoJob, photoMessage, photoSummary
 } from "./photo-request.mjs";
 import { readCustomerLinks, normalizeLink } from "./link-reader.mjs";
+import { readCustomerPhotos, photoSearchText, photoContextNote, photoLogNote } from "./photo-reader.mjs";
+import { gateProductLinks, storefrontLiveHandles, storefrontSearchHandles } from "./link-gate.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1066,6 +1068,13 @@ async function searchDocumentsForQuery(query, vectorStoreId, apiKey, model, effo
   return extractFileSearchDocuments(payload);
 }
 
+// What the catalog search runs on: the latest message, or on a photo turn what was typed
+// (attachment words dropped) plus what the photo says (photo-reader.mjs).
+function latestSearchMessage(conversation, options = {}) {
+  const latest = getLatestUserMessage(conversation);
+  return options.photoRead ? photoSearchText(latest, options.photoRead) : latest;
+}
+
 function getLatestUserMessage(conversation) {
   for (let index = conversation.length - 1; index >= 0; index -= 1) {
     if (conversation[index]?.role === "user" && conversation[index]?.content) {
@@ -1917,7 +1926,7 @@ async function getShopifyProductContext(conversation, options = {}) {
   const base = await searchProductContext(conversation, options);
   if ((options.tool || "hvac") !== "hvac" || !base) return base;
   try {
-    const latest = getLatestUserMessage(conversation);
+    const latest = latestSearchMessage(conversation, options);
     const brand = conversationEquipmentBrand(conversation);
     if (!brand) return base;
     const terms = buildShopifySearchQuery(latest).split(" ").filter(Boolean);
@@ -1965,7 +1974,7 @@ async function searchProductContext(conversation, options = {}) {
   }
 
   // options.message: a search the finder words itself (the unit's brand carried forward).
-  const askedMessage = options.message || getLatestUserMessage(conversation);
+  const askedMessage = options.message || latestSearchMessage(conversation, options);
   // A link to another site: what part its page is for (link-reader.mjs). Nothing is fetched
   // when the message has no such link.
   const linkedPages = options.readLinks === false || options.message ? [] : await readCustomerLinks(askedMessage, { apiKey: process.env.OPENAI_API_KEY });
@@ -2366,15 +2375,27 @@ async function createOpenAIResponse(conversation, cfg = null, options = {}) {
     ]
   }));
 
-  const shopifyContext = await getShopifyProductContext(conversation, { tool: options.tool });
+  // A customer's photo is read first, so the search runs on what it says (photo-reader.mjs).
+  // null on every turn without a photo, and then nothing extra is called.
+  const latestUser = [...conversation].reverse().find((m) => m && m.role === "user");
+  const photoRead = await readCustomerPhotos(latestUser, {
+    apiKey,
+    model: process.env.OPENAI_MODEL || "gpt-5-mini"
+  }).catch(() => null);
+  const shopifyContext = await getShopifyProductContext(conversation, { tool: options.tool, photoRead });
   // A stock question: point the customer at the live-check button instead of letting the
   // model imply it checked anything. Only on these turns, so every other answer is unchanged.
   if (isStockAsk(getLatestUserMessage(conversation))) {
     input.unshift({ role: "system", content: [{ type: "input_text", text: STOCK_BUTTON_NOTE }] });
   }
   // A request to see a part: point at the "Show product photos" button (HVAC finder only; see photo-request.mjs).
-  if (options.tool !== "lamp" && isPhotoAsk(getLatestUserMessage(conversation))) {
+  // Not when the customer is the one sending a photo ("here's a picture of the part").
+  if (options.tool !== "lamp" && !photoRead && isPhotoAsk(getLatestUserMessage(conversation))) {
     input.unshift({ role: "system", content: [{ type: "input_text", text: PHOTO_BUTTON_NOTE }] });
+  }
+  const photoNote = photoContextNote(photoRead);
+  if (photoNote) {
+    input.unshift({ role: "system", content: [{ type: "input_text", text: photoNote }] });
   }
   if (shopifyContext?.text) {
     input.unshift({
@@ -2433,19 +2454,24 @@ async function createOpenAIResponse(conversation, cfg = null, options = {}) {
     payload,
     usedSources: shopifyContext?.text ? ["shopify"] : [],
     // null = the catalog search didn't run (no store credentials, or nothing to search on)
-    catalog: shopifyContext ? { query: shopifyContext.searchQuery || "", handles: shopifyContext.handles || [] } : null
+    catalog: shopifyContext ? { query: shopifyContext.searchQuery || "", handles: shopifyContext.handles || [] } : null,
+    photoRead
   };
 }
 
 // Fire-and-forget: record a completed Parts Finder Q&A turn in the NESH CRM (chat_logs).
 // Never blocks or affects the customer's reply; silently no-ops if CRM_CHATLOG_SECRET is unset.
-function logChatToCrm(conversation, reply, usedTools, documents, sessionId, tool = "hvac", catalog = null) {
+function logChatToCrm(conversation, reply, usedTools, documents, sessionId, tool = "hvac", catalog = null, photoRead = null) {
   const secret = process.env.CRM_CHATLOG_SECRET;
   if (!secret) return;
   const url = process.env.CRM_CHATLOG_URL || "https://nesh-crm.onrender.com/api/hooks/finder-chat";
   const lastUser = [...conversation].reverse().find((m) => m && m.role === "user");
   if (!lastUser || !reply) return;
-  const photoNote = Array.isArray(lastUser.images) && lastUser.images.length ? "[📷 photo attached] " : "";
+  // "[📷 photo attached]" stays as-is (the CRM's gap report strips it); what the photo said
+  // follows, so the report sees the part numbers on it.
+  const photoNote = Array.isArray(lastUser.images) && lastUser.images.length
+    ? `[📷 photo attached] ${photoLogNote(photoRead)}`
+    : "";
   const payload = {
     session_id: sessionId || "",
     source: "parts-finder",
@@ -3079,6 +3105,19 @@ const server = createServer(async (request, response) => {
         finalReply = `${base}\n\nI'm not finding a document on file that matches that exact model — double-check the model number and I'll take another look.`.trim();
       }
 
+      // Every product link must open a real page (link-gate.mjs): one the search handed the
+      // model is kept, any other is looked up, and a dead one is pointed at the listing it was
+      // meant to be or taken out. Runs before the buttons below, which read the links.
+      const linkGate = await gateProductLinks(finalReply, {
+        trusted: openAIResponse.catalog?.handles || [],
+        lookup: (handles) => storefrontLiveHandles(handles),
+        search: (term) => storefrontSearchHandles(term)
+      }).catch(() => null);
+      if (linkGate) finalReply = linkGate.reply;
+      const linkNote = linkGate && (linkGate.repaired.length || linkGate.removed.length)
+        ? ` [link-gate${linkGate.repaired.map((r) => ` fixed ${r.from}->${r.to}`).join("")}${linkGate.removed.map((h) => ` removed ${h}`).join("")}]`
+        : "";
+
       // "Check real-time stock" button: offered for the in-stock products this reply links.
       // Nothing is checked until the customer taps it (POST /api/stock-check).
       const stockCheck = await stockCheckOffer(conversation, finalReply, getLatestUserMessage(conversation))
@@ -3106,7 +3145,7 @@ const server = createServer(async (request, response) => {
       }
       // admin test-mode sessions (TEST- prefix, via /finder?test=1) are not logged to the CRM
       if (!String(parsed.sessionId || "").startsWith("TEST-")) {
-        logChatToCrm(conversation, finalReply, usedSources, shownDocuments, parsed.sessionId, tool, openAIResponse.catalog);
+        logChatToCrm(conversation, finalReply, `${usedSources}${linkNote}`, shownDocuments, parsed.sessionId, tool, openAIResponse.catalog, openAIResponse.photoRead);
       }
       return;
     } catch (error) {
