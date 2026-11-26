@@ -11,7 +11,8 @@
 // vendor stays server-side: it is never put in a reply, the model's context or the page.
 const LIVE_STOCK_VENDORS = new Set(["METROPAC", "JTX", "PLI"]);
 const MAX_ITEMS = 3;
-const CONTACT_URL = "https://newenglandsupplyhouse.com/pages/contact";
+// No contact or call-us line in any stock answer (Jason, 2026-11-26): an out-of-stock
+// reading asks for an email for a back-in-stock alert instead.
 
 const HANDLE = /^[a-z0-9][a-z0-9-]{0,254}$/;
 // Our own product pages only: the storefront, its myshopify twin, or a relative link.
@@ -109,7 +110,7 @@ export function stockCheckRejection(ip, env = process.env) {
   const now = Date.now();
   const today = new Date(now).toISOString().slice(0, 10);
   if (day.key !== today) day = { key: today, count: 0 };
-  if (day.count >= dailyCap) return "Live stock checks are paused for today. Please contact us and we'll confirm availability for you.";
+  if (day.count >= dailyCap) return "Live stock checks are paused for today. Please try again tomorrow.";
   const taps = (ipTaps.get(ip) || []).filter((t) => now - t < 60_000);
   if (taps.length >= perMinute) return "That's a lot of stock checks in a row — please wait a moment and try again.";
   taps.push(now);
@@ -156,6 +157,17 @@ export const PICKUP_LINE = "**Local pickup in Foxboro:** order online first and 
 const forPickup = (row) => row.state === "in_stock" && row.supplier === "metropac";
 const pickupFor = (rows) => (rows.some(forPickup) ? `\n\n${PICKUP_LINE}` : "");
 
+// An out-of-stock reading asks for an email for a back-in-stock alert. The CRM's sweep
+// (nesh-crm back-in-stock.mjs) enrolls the email from the chat log, pinning the product
+// by the out_of_stock SKUs in this check's log line. Keep "back in stock" in the wording:
+// the sweep's sold-out text gate also looks for it.
+export function alertAsk(outCount, single = false) {
+  const what = single ? "it's" : outCount > 1 ? "the out-of-stock items are" : "the out-of-stock item is";
+  const when = single || outCount === 1 ? "it's back in stock" : "they're back in stock";
+  return `Want a heads-up when ${what} back? Reply here with your email address and we'll send one email as soon as ${when} — nothing ordered, no charge.`;
+}
+export const ALERT_ASK = alertAsk(1, true);
+
 // How many of a listing the supplier can fill right now. onHand is in supplier units; a
 // pack listing takes perUnit of them for each one we sell. A lamp read has no count (the
 // supplier only says in or out), so this is null and the answer says "confirmed".
@@ -171,7 +183,7 @@ export function unitsAvailable(row) {
 // confirm", never "in stock". A positive reading with a count says the count.
 export function stockCheckMessage(rows) {
   const stamp = etTime(rows.map((r) => r.checkedAt).filter(Boolean).sort()[0]);
-  const contact = `[contact us](${CONTACT_URL})`;
+  const outCount = rows.filter((row) => row.state === "out_of_stock").length;
   const wasRead = (row) => row.state === "in_stock" || row.state === "out_of_stock";
 
   if (rows.length === 1) {
@@ -184,9 +196,9 @@ export function stockCheckMessage(rows) {
       return `✅ **In stock — confirmed.** I just checked ${link(row)} against our warehouse inventory control system (${stamp}), and it's available for your order. ${REAL_TIME_NOTE}${pickupFor([row])}`;
     }
     if (row.state === "out_of_stock") {
-      return `⚠️ I just checked ${link(row)} against our warehouse inventory control system (${stamp}), and it is **not in stock right now**. ${REAL_TIME_NOTE} Please ${contact} and we'll get you a lead time or a matching part before you order.`;
+      return `⚠️ I just checked ${link(row)} against our warehouse inventory control system (${stamp}), and it is **not in stock right now**. ${REAL_TIME_NOTE}\n\n${ALERT_ASK}`;
     }
-    return `I couldn't get a live confirmation for ${link(row)} from our warehouse inventory control system just now. Please tap the button again in a minute, or ${contact} and we'll confirm it for you.`;
+    return `I couldn't get a live confirmation for ${link(row)} from our warehouse inventory control system just now. Please tap the button again in a minute.`;
   }
 
   const lines = rows.map((row) => {
@@ -198,14 +210,16 @@ export function stockCheckMessage(rows) {
     return `- ${link(row)}: couldn't get a live confirmation — please try again in a minute`;
   });
   const allIn = rows.every((row) => row.state === "in_stock");
+  const anyUnknown = rows.some((row) => row.state === "unknown");
   const tail = allIn
     ? "They're available for your order."
-    : `For anything not confirmed, please ${contact} and we'll get you a lead time or confirm it for you.`;
+    : anyUnknown ? "For anything I couldn't confirm, tap the button again in a minute." : "";
   return [
     `I checked our warehouse inventory control system just now (${stamp}):`,
     lines.join("\n"),
-    rows.some(wasRead) ? `${REAL_TIME_NOTE} ${tail}` : tail
-  ].join("\n\n") + pickupFor(rows);
+    [rows.some(wasRead) ? REAL_TIME_NOTE : "", tail].filter(Boolean).join(" "),
+    outCount ? alertAsk(outCount) : ""
+  ].filter(Boolean).join("\n\n") + pickupFor(rows);
 }
 
 // handles -> { reply, rows }. rows carry the raw readings for the internal log only.
@@ -213,7 +227,7 @@ export async function runStockCheck(handles, env = process.env) {
   const products = await lookupProducts((Array.isArray(handles) ? handles : []).map((h) => String(h).toLowerCase()), env);
   if (!products.length) {
     return {
-      reply: `I couldn't find that product to check. Please [contact us](${CONTACT_URL}) and we'll confirm availability for you.`,
+      reply: "I couldn't find that product to check just now. Please try the check again in a minute.",
       rows: []
     };
   }
