@@ -149,6 +149,13 @@ const count = (n) => n.toLocaleString("en-US");
 // phone call would get the same answer. Never shown on a reading we could not get.
 export const REAL_TIME_NOTE = "This is real-time inventory — the same information you'd get if you called us.";
 
+// The order-first line every page carries, for a customer about to drive over. Only on an
+// item confirmed in stock from the HVAC warehouse: lamps ship from their supplier and never
+// get it (the same vendor rule as the note under Add to cart on product pages).
+export const PICKUP_LINE = "**Local pickup in Foxboro:** order online first and we'll notify you when it's ready. We're a warehouse, not a walk-in store.";
+const forPickup = (row) => row.state === "in_stock" && row.supplier === "metropac";
+const pickupFor = (rows) => (rows.some(forPickup) ? `\n\n${PICKUP_LINE}` : "");
+
 // How many of a listing the supplier can fill right now. onHand is in supplier units; a
 // pack listing takes perUnit of them for each one we sell. A lamp read has no count (the
 // supplier only says in or out), so this is null and the answer says "confirmed".
@@ -171,10 +178,10 @@ export function stockCheckMessage(rows) {
     const [row] = rows;
     const units = unitsAvailable(row);
     if (row.state === "in_stock" && units != null) {
-      return `✅ **In stock — ${count(units)} available right now.** I just checked ${link(row)} against our warehouse inventory control system (${stamp}). ${REAL_TIME_NOTE}`;
+      return `✅ **In stock — ${count(units)} available right now.** I just checked ${link(row)} against our warehouse inventory control system (${stamp}). ${REAL_TIME_NOTE}${pickupFor([row])}`;
     }
     if (row.state === "in_stock") {
-      return `✅ **In stock — confirmed.** I just checked ${link(row)} against our warehouse inventory control system (${stamp}), and it's available for your order. ${REAL_TIME_NOTE}`;
+      return `✅ **In stock — confirmed.** I just checked ${link(row)} against our warehouse inventory control system (${stamp}), and it's available for your order. ${REAL_TIME_NOTE}${pickupFor([row])}`;
     }
     if (row.state === "out_of_stock") {
       return `⚠️ I just checked ${link(row)} against our warehouse inventory control system (${stamp}), and it is **not in stock right now**. ${REAL_TIME_NOTE} Please ${contact} and we'll get you a lead time or a matching part before you order.`;
@@ -198,7 +205,7 @@ export function stockCheckMessage(rows) {
     `I checked our warehouse inventory control system just now (${stamp}):`,
     lines.join("\n"),
     rows.some(wasRead) ? `${REAL_TIME_NOTE} ${tail}` : tail
-  ].join("\n\n");
+  ].join("\n\n") + pickupFor(rows);
 }
 
 // handles -> { reply, rows }. rows carry the raw readings for the internal log only.
