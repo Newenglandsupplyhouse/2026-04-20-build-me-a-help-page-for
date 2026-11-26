@@ -3093,7 +3093,12 @@ const server = createServer(async (request, response) => {
             .slice(0, 3)
         : [];
 
-      const base = replyText || "No response text returned.";
+      // The web-search and file tools mark their sources inline as private-use characters
+      // around "cite"/"filecite" and turn ids; the page showed them as "citeturn0search0".
+      // Seen in 7 of 928 logged answers (2026-07-07 .. 11-26). They carry nothing for the customer.
+      const base = String(replyText || "No response text returned.")
+        .replace(/[ \t]?[^]{0,300}/g, "")
+        .replace(/[-]/g, "");
       // The code owns all document messaging (the model has no doc tool): list the
       // real matches, or — only when they named a specific model that we still
       // couldn't match — say plainly we don't have it. Otherwise the model's own
