@@ -2,7 +2,11 @@
 // real-time note, and the cases that must never claim a number. Run from scripts/:
 // node stock-check-test.mjs
 import assert from "node:assert/strict";
-import { stockCheckMessage, stockCheckSummary, unitsAvailable, REAL_TIME_NOTE, PICKUP_LINE } from "../stock-check.mjs";
+import { stockCheckMessage, stockCheckSummary, unitsAvailable, REAL_TIME_NOTE, PICKUP_LINE, ALERT_ASK } from "../stock-check.mjs";
+
+// No reply may offer a call or a contact page (Jason, 2026-11-26). The real-time note
+// itself says "if you called us", so it is taken out before looking.
+const offersContact = (msg) => /contact|\bcall\b|phone/i.test(msg.split(REAL_TIME_NOTE).join(""));
 
 let n = 0;
 const ok = (name) => { n += 1; console.log(`ok ${n} - ${name}`); };
@@ -55,10 +59,12 @@ const row = (over = {}) => ({
   const msg = stockCheckMessage([row({ state: "out_of_stock", onHand: 0 })]);
   assert.ok(msg.includes("**not in stock right now**"), msg);
   assert.ok(msg.includes(REAL_TIME_NOTE), msg);
-  assert.ok(msg.indexOf(REAL_TIME_NOTE) < msg.indexOf("[contact us]"), "note comes before the contact line");
+  assert.ok(!offersContact(msg), msg);
+  assert.ok(msg.endsWith(`${REAL_TIME_NOTE}\n\n${ALERT_ASK}`), msg);
+  assert.ok(ALERT_ASK.includes("back in stock"), "the CRM sweep's text gate looks for this phrase");
   assert.ok(!/\d+ available/.test(msg));
   assert.ok(!msg.includes(PICKUP_LINE), "nothing to pick up");
-  ok("out of stock carries the note, never a count or a pickup line");
+  ok("out of stock: note, then the email ask for a stock alert; no count, no pickup line, no contact");
 }
 
 // 6. Not enough on hand for a pack reads as out of stock from the service; we never show the partial count.
@@ -75,7 +81,9 @@ const row = (over = {}) => ({
   assert.ok(msg.startsWith("I couldn't get a live confirmation"), msg);
   assert.ok(!msg.includes(REAL_TIME_NOTE), msg);
   assert.ok(!/in stock/i.test(msg));
-  ok("unknown reading has no note and no claim");
+  assert.ok(!offersContact(msg), msg);
+  assert.ok(!msg.includes("email"), "no alert ask on a failed read");
+  ok("unknown reading has no note, no claim, no contact, no email ask");
 }
 
 // 8. Three items: counts per line, one note for the lot, contact line when any is short.
@@ -90,10 +98,26 @@ const row = (over = {}) => ({
   assert.ok(msg.includes("Steam Radiator Trap](https://newenglandsupplyhouse.com/products/barnes-jones-122a-steam-radiator-trap): ✅ **In stock — 3 available right now**"), msg);
   assert.ok(msg.includes("- [Something Out](https://newenglandsupplyhouse.com/products/x): ⚠️ **Not in stock right now**"), msg);
   assert.equal(msg.split(REAL_TIME_NOTE).length, 2, "note exactly once");
-  assert.ok(msg.includes("[contact us]"), msg);
+  assert.ok(!offersContact(msg), msg);
+  assert.ok(msg.includes("\n\nWant a heads-up when the out-of-stock item is back? Reply here with your email address and we'll send one email as soon as it's back in stock — nothing ordered, no charge.\n\n"), msg);
   assert.ok(msg.endsWith(`\n\n${PICKUP_LINE}`), msg);
   assert.equal(msg.split(PICKUP_LINE).length, 2, "pickup line exactly once");
-  ok("multi-item list with counts, one note, contact line, pickup line last");
+  ok("multi-item list with counts, one note, email ask for the out-of-stock item, pickup line last");
+}
+
+// 8b. Two out of stock and one unreadable: plural email ask, retry line, no pickup line.
+{
+  const rows = [
+    row({ sku: "1", title: "Out One", handle: "out-one", state: "out_of_stock", onHand: 0 }),
+    row({ sku: "2", title: "Out Two", handle: "out-two", state: "out_of_stock", onHand: 0 }),
+    row({ sku: "3", title: "Unknown Three", handle: "unknown-three", state: "unknown", onHand: null, reason: "busy", checkedAt: null })
+  ];
+  const msg = stockCheckMessage(rows);
+  assert.ok(msg.includes(`${REAL_TIME_NOTE} For anything I couldn't confirm, tap the button again in a minute.`), msg);
+  assert.ok(msg.endsWith("Want a heads-up when the out-of-stock items are back? Reply here with your email address and we'll send one email as soon as they're back in stock — nothing ordered, no charge."), msg);
+  assert.ok(!offersContact(msg), msg);
+  assert.ok(!msg.includes(PICKUP_LINE), msg);
+  ok("two out + one unknown: plural email ask last, retry line, no pickup line, no contact");
 }
 
 // 9. Three items all in, one of them a lamp: "confirmed" for the lamp, "available for your order" tail.
